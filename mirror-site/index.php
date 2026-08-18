@@ -1,11 +1,13 @@
 <?php
-/** DeepSeek Harness Desktop — 产品页 / 镜像与下载中心。 */
+/** DeepSeek Harness Desktop — 产品页 / 镜像与下载中心。
+ * 视觉风格对齐 deepseek.com/harness：浅色、编辑排版、克制留白。 */
 require __DIR__ . '/lib.php';
 
 $latest = read_manifest('latest.json');
 $feed = read_manifest('feed.json');
 $engineHistory = read_history('engine');
 $desktopHistory = read_history('desktop');
+$cfg = site_config();
 
 $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http')
     . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
@@ -26,6 +28,10 @@ if ($feed && empty($desktopHistory) && !empty($feed['version'])) {
         'size' => null, 'uploadedAt' => null, 'notes' => $feed['notes'] ?? '',
     ]];
 }
+
+$screens = !empty($cfg['screens']) && is_array($cfg['screens'])
+    ? $cfg['screens']
+    : ['assets/screens/app-main.png', 'assets/screens/app-settings.png'];
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -33,21 +39,22 @@ if ($feed && empty($desktopHistory) && !empty($feed['version'])) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeepSeek Harness Desktop — 桌面客户端 · 镜像与下载中心</title>
-<meta name="description" content="DeepSeek Harness Desktop：把官方 DeepSeek Harness 的本地 Web UI 带到原生桌面。免 Node.js、系统托盘、多模态增强、Skill 与 MCP 可视化管理。">
+<meta name="description" content="DeepSeek Harness Desktop：把官方 DeepSeek Harness 带到原生桌面。免 Node.js、系统托盘、多模态对话、Skill 与 MCP 可视化管理、账户与用量一览。">
 <link rel="icon" type="image/svg+xml" href="assets/dsh.svg">
 <style>
 :root {
-  --bg: #08090d;
-  --bg-raise: #0e1118;
-  --panel: #11141d;
-  --line: rgba(255,255,255,.07);
-  --line-strong: rgba(255,255,255,.12);
-  --text: #e8eaf0;
-  --sub: #9aa1b2;
-  --faint: #626a7c;
+  --bg: #ffffff;
+  --bg-soft: #f7f8fa;
+  --panel: #ffffff;
+  --line: #e8eaee;
+  --line-strong: #d8dbe2;
+  --text: #0b0d12;
+  --sub: #5b6270;
+  --faint: #98a0ae;
   --accent: #4d6bfe;
-  --accent-soft: rgba(77,107,254,.12);
-  --ok: #3fb96c;
+  --accent-deep: #3b56e8;
+  --accent-soft: rgba(77,107,254,.07);
+  --ok: #12934f;
   --radius: 14px;
   --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
 }
@@ -55,121 +62,119 @@ if ($feed && empty($desktopHistory) && !empty($feed['version'])) {
 html { scroll-behavior: smooth; }
 body { background: var(--bg); color: var(--text); font: 15px/1.75 var(--font); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
-.wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
-
-/* ambient */
-.glow { position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background:
-    radial-gradient(720px 380px at 18% -6%, rgba(77,107,254,.13), transparent 62%),
-    radial-gradient(640px 340px at 84% 4%, rgba(77,107,254,.07), transparent 60%);
-}
-.grid-lines { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .35;
-  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 40%, transparent 100%);
-}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
 
 /* nav */
-nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: rgba(8,9,13,.72); border-bottom: 1px solid var(--line); }
-nav .wrap { display: flex; align-items: center; height: 60px; gap: 28px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: .2px; }
+nav { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(14px); background: rgba(255,255,255,.82); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; height: 64px; gap: 32px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: .2px; font-size: 15.5px; }
 .brand img { width: 26px; height: 26px; }
 .brand small { color: var(--faint); font-weight: 400; font-size: 12px; margin-left: 2px; }
-nav .links { margin-left: auto; display: flex; gap: 26px; font-size: 13.5px; color: var(--sub); }
+nav .links { margin-left: auto; display: flex; align-items: center; gap: 28px; font-size: 13.5px; color: var(--sub); }
 nav .links a:hover { color: var(--text); }
+nav .gh { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--text); font-size: 13px; transition: border-color .15s, background .15s; }
+nav .gh:hover { border-color: var(--text); background: var(--bg-soft); }
 
 /* hero */
-header.hero { position: relative; z-index: 1; padding: 108px 0 76px; }
-.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--sub); border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 14px; letter-spacing: .4px; }
+header.hero { padding: 120px 0 88px; border-bottom: 1px solid var(--line); }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--sub); border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px 14px; letter-spacing: 1.2px; text-transform: uppercase; }
 .eyebrow i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: inline-block; }
-h1 { font-size: 46px; line-height: 1.22; font-weight: 650; letter-spacing: .3px; margin: 26px 0 0; max-width: 720px; }
-h1 .thin { color: var(--sub); font-weight: 450; }
-.hero p.lead { color: var(--sub); font-size: 17px; max-width: 620px; margin-top: 20px; }
-.cta { display: flex; gap: 14px; margin-top: 38px; flex-wrap: wrap; }
-.btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 24px; border-radius: 10px; font-size: 14.5px; border: 1px solid var(--line-strong); background: var(--bg-raise); color: var(--text); transition: border-color .15s, background .15s; }
-.btn:hover { border-color: rgba(255,255,255,.24); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn.primary:hover { background: #5f7bff; }
+h1 { font-size: 58px; line-height: 1.16; font-weight: 680; letter-spacing: -.5px; margin: 30px 0 0; max-width: 760px; }
+h1 .thin { color: var(--faint); font-weight: 500; }
+.hero p.lead { color: var(--sub); font-size: 17.5px; max-width: 640px; margin-top: 24px; }
+.cta { display: flex; gap: 14px; margin-top: 42px; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; gap: 9px; height: 46px; padding: 0 26px; border-radius: 10px; font-size: 14.5px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--text); transition: border-color .15s, background .15s, color .15s; }
+.btn:hover { border-color: var(--text); }
+.btn.primary { background: #0b0d12; border-color: #0b0d12; color: #fff; }
+.btn.primary:hover { background: #232733; border-color: #232733; }
+.btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.accent:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
 .btn svg { flex: none; }
-.hero-meta { margin-top: 18px; color: var(--faint); font-size: 12.5px; }
+.hero-meta { margin-top: 20px; color: var(--faint); font-size: 12.5px; letter-spacing: .2px; }
 
 /* stats */
-.stats { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
-.stats div { padding: 22px 26px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); }
+.stats div { padding: 30px 32px; }
 .stats div + div { border-left: 1px solid var(--line); }
-.stats b { display: block; font-size: 24px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.stats b { display: block; font-size: 26px; font-weight: 620; margin-top: 6px; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
 .stats b.ok { color: var(--ok); }
-.stats span { color: var(--faint); font-size: 12.5px; letter-spacing: .3px; }
+.stats span { color: var(--faint); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
 
 /* sections */
-section { position: relative; z-index: 1; padding: 64px 0 8px; }
-.sec-head { margin-bottom: 30px; }
-.sec-head em { font-style: normal; color: var(--accent); font-size: 12.5px; letter-spacing: 2px; text-transform: uppercase; }
-.sec-head h2 { font-size: 26px; font-weight: 600; margin-top: 8px; }
-.sec-head p { color: var(--sub); margin-top: 8px; max-width: 640px; font-size: 14.5px; }
+section { padding: 88px 0 0; }
+.sec-head { margin-bottom: 40px; }
+.sec-head em { font-style: normal; color: var(--accent); font-size: 12px; letter-spacing: 2.4px; text-transform: uppercase; font-weight: 600; }
+.sec-head h2 { font-size: 34px; font-weight: 640; margin-top: 12px; letter-spacing: -.4px; }
+.sec-head p { color: var(--sub); margin-top: 12px; max-width: 660px; font-size: 15px; }
 
-/* feature grid */
-.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.feature { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 24px 22px; transition: border-color .18s; }
-.feature:hover { border-color: var(--line-strong); }
-.feature h3 { font-size: 15.5px; font-weight: 600; margin-bottom: 8px; }
-.feature p { color: var(--sub); font-size: 13.5px; line-height: 1.7; }
-.feature .no { color: var(--accent); font-size: 12px; letter-spacing: 1px; display: block; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+/* feature grid — editorial, hairline */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.feature { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 30px 28px 34px; transition: background .18s; }
+.feature:hover { background: var(--bg-soft); }
+.feature h3 { font-size: 16px; font-weight: 620; margin-bottom: 10px; }
+.feature p { color: var(--sub); font-size: 13.5px; line-height: 1.75; }
+.feature .no { color: var(--faint); font-size: 12px; letter-spacing: 1.4px; display: block; margin-bottom: 16px; font-variant-numeric: tabular-nums; }
+
+/* screenshots */
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.shots figure { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--bg-soft); }
+.shots img { display: block; width: 100%; }
+.shots figcaption { padding: 12px 18px; color: var(--faint); font-size: 12.5px; border-top: 1px solid var(--line); background: var(--panel); }
 
 /* tables */
 .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
 .panel + .panel { margin-top: 16px; }
-.panel-head { display: flex; align-items: baseline; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
-.panel-head h3 { font-size: 15px; font-weight: 600; }
+.panel-head { display: flex; align-items: baseline; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.panel-head h3 { font-size: 15.5px; font-weight: 620; }
 .panel-head span { color: var(--faint); font-size: 12.5px; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th, td { text-align: left; padding: 12px 22px; border-bottom: 1px solid var(--line); }
+th, td { text-align: left; padding: 14px 24px; border-bottom: 1px solid var(--line); }
 tr:last-child td { border-bottom: none; }
-th { color: var(--faint); font-weight: 500; font-size: 12px; letter-spacing: .4px; }
+tbody tr, table tr { transition: background .12s; }
+tr:hover td { background: var(--bg-soft); }
+th { color: var(--faint); font-weight: 500; font-size: 12px; letter-spacing: .6px; }
 td.num { color: var(--sub); font-variant-numeric: tabular-nums; }
-.pill { display: inline-block; font-size: 11.5px; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--sub); margin-left: 8px; vertical-align: 1px; }
-.pill.current { color: var(--ok); border-color: rgba(63,185,108,.4); background: rgba(63,185,108,.08); }
-.dl { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; }
+.pill { display: inline-block; font-size: 11.5px; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--sub); margin-left: 8px; vertical-align: 1px; }
+.pill.current { color: var(--ok); border-color: rgba(18,147,79,.35); background: rgba(18,147,79,.06); }
+.dl { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 13px; font-weight: 550; }
 .dl:hover { text-decoration: underline; }
 .dl.off { color: var(--faint); pointer-events: none; }
 .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12.5px; }
 
-/* usage */
-.usage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.usage .panel { padding: 20px 22px; }
-.usage h3 { font-size: 14.5px; margin-bottom: 6px; }
+/* endpoints */
+.usage { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+.usage .panel { padding: 22px 24px; }
+.usage h3 { font-size: 14.5px; font-weight: 620; margin-bottom: 6px; }
 .usage p { color: var(--sub); font-size: 13px; margin-bottom: 12px; }
-pre { background: #0a0d13; border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font: 12.5px/1.7 "Cascadia Code", Consolas, monospace; color: #b8c2d8; overflow: auto; user-select: all; }
+pre { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; font: 12.5px/1.7 "Cascadia Code", Consolas, monospace; color: #3c4353; overflow: auto; user-select: all; }
 
 /* community */
-.community { display: grid; grid-template-columns: 1fr 300px; gap: 14px; }
-.community .panel { padding: 24px 26px; }
-.community h3 { font-size: 15.5px; margin-bottom: 8px; }
+.community { display: grid; grid-template-columns: 1fr 280px; gap: 18px; }
+.community .panel { padding: 28px 30px; }
+.community h3 { font-size: 16px; font-weight: 620; margin-bottom: 8px; }
 .community p { color: var(--sub); font-size: 13.5px; }
-.qq-no { font-size: 22px; font-weight: 600; letter-spacing: 1px; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }
-.qq-qr { text-align: center; }
-.qq-qr img { width: 180px; height: 180px; border-radius: 10px; border: 1px solid var(--line-strong); }
-.qq-qr figcaption { color: var(--faint); font-size: 12px; margin-top: 10px; }
+.qq-no { font-size: 26px; font-weight: 640; letter-spacing: 1.2px; margin: 14px 0 6px; font-variant-numeric: tabular-nums; }
+.qq-qr { display: flex; align-items: center; justify-content: center; }
+.qq-qr img { width: 196px; height: 196px; border-radius: 12px; border: 1px solid var(--line); }
+.qq-qr figcaption { color: var(--faint); font-size: 12px; margin-top: 12px; text-align: center; }
 
-footer { position: relative; z-index: 1; border-top: 1px solid var(--line); margin-top: 84px; padding: 30px 0 46px; color: var(--faint); font-size: 12.5px; }
+footer { border-top: 1px solid var(--line); margin-top: 100px; padding: 36px 0 52px; color: var(--faint); font-size: 12.5px; }
 footer .wrap { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 footer a { color: var(--sub); }
 footer a:hover { color: var(--text); }
 footer .sep { margin: 0 10px; color: var(--line-strong); }
 
-@media (max-width: 860px) {
-  .features { grid-template-columns: 1fr 1fr; }
+@media (max-width: 900px) {
+  .features { grid-template-columns: 1fr; }
   .stats { grid-template-columns: 1fr; }
   .stats div + div { border-left: none; border-top: 1px solid var(--line); }
-  .usage, .community { grid-template-columns: 1fr; }
-  h1 { font-size: 34px; }
-  nav .links { display: none; }
+  .usage, .community, .shots { grid-template-columns: 1fr; }
+  h1 { font-size: 38px; }
+  nav .links a:not(.gh) { display: none; }
 }
 </style>
 </head>
 <body>
-<div class="glow"></div>
-<div class="grid-lines"></div>
 
 <nav><div class="wrap">
   <a class="brand" href="./">
@@ -178,16 +183,21 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
   </a>
   <div class="links">
     <a href="#features">功能</a>
+    <a href="#screens">界面</a>
     <a href="#downloads">下载</a>
     <a href="#mirror">镜像</a>
     <a href="#community">社区</a>
+    <a class="gh" href="<?= h($cfg['github_url']) ?>" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      GitHub
+    </a>
   </div>
 </div></nav>
 
 <header class="hero"><div class="wrap">
-  <span class="eyebrow"><i></i>官方引擎桌面发行版 · v<?= h($feed['version'] ?? '1.3.0') ?></span>
-  <h1>把 DeepSeek Harness<br><span class="thin">装进你的桌面。</span></h1>
-  <p class="lead">官方引擎随包内置，独立 Node 运行时，无需安装任何依赖。系统托盘常驻、多模态对话增强、Skill 与 MCP 可视化管理，以及不受官方源速率限制的高速更新镜像。</p>
+  <span class="eyebrow"><i></i>Desktop Edition · v<?= h($feed['version'] ?? '1.3.1') ?></span>
+  <h1>DeepSeek Harness，<br><span class="thin">桌面级形态。</span></h1>
+  <p class="lead">官方引擎随包内置，独立运行时，无需安装任何依赖。多模态对话、Skill 生态、MCP 管理、账户与用量一览——官方体验之上，桌面级的完整。</p>
   <div class="cta">
     <?php if ($desktopUrl): ?>
     <a class="btn primary" href="<?= h($desktopUrl) ?>">
@@ -195,8 +205,11 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
       下载桌面版 <?= h($feed['version'] ?? '') ?>
     </a>
     <?php endif; ?>
-    <a class="btn" href="#downloads">查看历史版本</a>
-    <a class="btn" href="#mirror">更新镜像</a>
+    <a class="btn" href="<?= h($cfg['github_url']) ?>" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      在 GitHub 查看
+    </a>
+    <a class="btn" href="<?= h($cfg['official_url']) ?>" target="_blank" rel="noopener">官方介绍</a>
   </div>
   <p class="hero-meta">Windows 10 及以上 · x64 · 安装包内置官方引擎，开箱即用</p>
 </div></header>
@@ -217,11 +230,27 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
   </div>
   <div class="features">
     <div class="feature"><span class="no">01</span><h3>内置服务，免装 Node.js</h3><p>随包携带官方引擎与独立 Node 运行时，应用自动启动并管理本地 Harness 服务；已在运行的服务直接唤醒复用。</p></div>
-    <div class="feature"><span class="no">02</span><h3>多模态对话流</h3><p>为第三方模型声明视觉输入，对话框内实时显示当前模型模态；图片草稿遇到纯文本模型时一键开启，模型切换自然无断点。</p></div>
-    <div class="feature"><span class="no">03</span><h3>Skill 加载器</h3><p>全根目录扫描与遮蔽校验，支持 GitHub 搜索安装、Git 仓库、本地文件夹，以及把 Skill 文件直接拖入窗口完成安装。</p></div>
-    <div class="feature"><span class="no">04</span><h3>MCP 插件与连接测试</h3><p>可视化增删改 MCP 服务器并一键测试连接、列出工具清单；配置经官方 mcp-client 插件注入，不改动任何官方文件。</p></div>
-    <div class="feature"><span class="no">05</span><h3>内置插件注解</h3><p>官方引擎的一百多个内置插件逐一给出中文功能说明，结构与用途一目了然。</p></div>
-    <div class="feature"><span class="no">06</span><h3>高速更新镜像</h3><p>预构建引擎包从本站直接下载，绕开缓慢的 npm 官方源；桌面版更新默认绑定本站，主地址不可用时自动启用备用源。</p></div>
+    <div class="feature"><span class="no">02</span><h3>多模态对话流</h3><p>多模态能力直接集成进官方对话流：支持图片的模型正常上传；纯文本模型在上传图片时会被拦截，并给出可一键切换的多模态模型建议。</p></div>
+    <div class="feature"><span class="no">03</span><h3>账户与用量</h3><p>查看当前 API Key 对应账户的余额，统计每个任务的 Token 消耗，按日与累计汇总，成本一目了然。</p></div>
+    <div class="feature"><span class="no">04</span><h3>Skill 加载器</h3><p>全根目录扫描与遮蔽校验，支持 GitHub 搜索安装、Git 仓库、本地文件夹，以及把 Skill 文件直接拖入窗口完成安装。</p></div>
+    <div class="feature"><span class="no">05</span><h3>MCP 插件与连接测试</h3><p>可视化增删改 MCP 服务器并一键测试连接、列出工具清单；官方插件列表内附中文功能注解，配置不改动任何官方文件。</p></div>
+    <div class="feature"><span class="no">06</span><h3>高速更新镜像</h3><p>预构建引擎包与桌面版更新默认绑定本站，绕开缓慢的官方源；仅在镜像不可用时才提示切换备用地址。</p></div>
+  </div>
+</div></section>
+
+<section id="screens"><div class="wrap">
+  <div class="sec-head">
+    <em>Interface</em>
+    <h2>界面预览</h2>
+    <p>官方 Web UI 原样保留，桌面能力以官方设计语言无缝融入。</p>
+  </div>
+  <div class="shots">
+    <?php foreach ($screens as $i => $src): ?>
+    <figure>
+      <img src="<?= h($src) ?>" alt="DeepSeek Harness Desktop 界面截图 <?= $i + 1 ?>" loading="lazy">
+      <figcaption><?= $i === 0 ? '对话主界面' : '设置面板' ?></figcaption>
+    </figure>
+    <?php endforeach; ?>
   </div>
 </div></section>
 
@@ -276,10 +305,10 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
     </table>
   </div>
 
-  <div class="usage" style="margin-top:16px">
+  <div class="usage">
     <div class="panel">
       <h3>引擎更新镜像地址</h3>
-      <p>桌面端「设置 → 更新与关于 → 加速更新镜像地址」，默认已绑定本站：</p>
+      <p>桌面端默认已绑定本站；仅当本站无法访问时，才会提示切换备用地址：</p>
       <pre><?= h($base) ?></pre>
     </div>
     <div class="panel">
@@ -300,14 +329,14 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
     <div class="panel">
       <h3>QQ 交流群</h3>
       <p>加入 DeepSeek Harness Desktop 用户群，获取使用帮助与更新通知。</p>
-      <div class="qq-no">1017339599</div>
-      <p style="margin-bottom:14px">群号即搜即入，或点击链接一键加群。</p>
-      <a class="btn" href="https://qm.qq.com/q/LnuRC7T5my" target="_blank" rel="noopener">一键加入 QQ 群</a>
+      <div class="qq-no"><?= h($cfg['qq_number']) ?></div>
+      <p style="margin-bottom:16px">群号即搜即入，或点击链接一键加群。</p>
+      <a class="btn accent" href="<?= h($cfg['qq_link']) ?>" target="_blank" rel="noopener">一键加入 QQ 群</a>
     </div>
     <div class="panel qq-qr">
       <figure>
-        <img src="assets/qq-qrcode.png" alt="QQ 群二维码">
-        <figcaption>扫码加入 QQ 群 1017339599</figcaption>
+        <img src="<?= h($cfg['qq_qr']) ?>" alt="QQ 群二维码">
+        <figcaption>扫码加入 QQ 群 <?= h($cfg['qq_number']) ?></figcaption>
       </figure>
     </div>
   </div>
@@ -316,10 +345,10 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
 <footer><div class="wrap">
   <span>DeepSeek Harness Desktop · 镜像与下载中心</span>
   <span>
-    <a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener">官方仓库</a>
+    <a href="<?= h($cfg['github_url']) ?>" target="_blank" rel="noopener">GitHub</a>
+    <span class="sep">/</span><a href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener">官方仓库</a>
     <span class="sep">/</span><a href="latest.json">latest.json</a>
     <span class="sep">/</span><a href="feed.json">feed.json</a>
-    <span class="sep">/</span><a href="admin/">管理入口</a>
   </span>
 </div></footer>
 </body>

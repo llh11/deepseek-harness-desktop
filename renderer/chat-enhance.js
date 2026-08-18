@@ -38,6 +38,11 @@ const CSS = `
 .dshdc-item:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
 .dshdc-item small { color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dshdc-empty { padding: 14px; text-align: center; color: var(--dsw-alias-label-quaternary, #777); font-size: 12px; }
+.dshdc-plugnote { display: block; margin-top: 2px; font-size: 11.5px; line-height: 16px; color: var(--dsw-alias-label-quaternary, #8a8f9c); font-family: inherit; }
+.dshdc-suggest { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--dsw-alias-state-warn-label, #d9a13b); border-radius: 10px; color: var(--dsw-alias-label-secondary, #aaa); font-size: 12.5px; line-height: 18px; font-family: inherit; }
+.dshdc-suggest button { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3)); background: transparent; color: var(--dsw-alias-label-primary, #ddd); border-radius: 12px; height: 24px; padding: 0 10px; font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.dshdc-suggest button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
+.dshdc-suggest .dshdc-suggest-primary { border-color: var(--dsw-alias-button-primary-fill, #4d6bfe); color: var(--dsw-alias-button-primary-fill, #4d6bfe); }
 `
 
 /** Initialize the chat-flow bridge. @param ipcRenderer - Electron ipcRenderer. */
@@ -97,17 +102,64 @@ function init(ipcRenderer) {
   }
 
   function acceptsImage(entry) {
+    return acceptsMedia(entry, 'image')
+  }
+
+  function acceptsMedia(entry, kind) {
     if (!entry) return false
     const model = entry.model
-    if (Array.isArray(model.input) && model.input.includes('image')) return true
-    if (!model.input && Array.isArray(entry.provider.defaultInput)) return entry.provider.defaultInput.includes('image')
+    if (Array.isArray(model.input) && model.input.includes(kind)) return true
+    if (!model.input && Array.isArray(entry.provider.defaultInput)) return entry.provider.defaultInput.includes(kind)
+    return false
+  }
+
+  /** Pick a model that accepts the given media kind — same provider first,
+   * then any provider, preferring vision-flavoured names. */
+  async function recommendMediaModel(kind, currentProviderId) {
+    const map = await providerIndex()
+    const visionish = /(gpt-4o|gpt-5|claude|gemini|glm-.*v|vl|qvq|vision|omni)/i
+    const seen = new Set()
+    const candidates = []
+    for (const value of map.values()) {
+      const key = `${value.provider.id}/${value.model.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (!acceptsMedia(value, kind)) continue
+      candidates.push(value)
+    }
+    if (candidates.length === 0) return null
+    candidates.sort((a, b) => {
+      const ap = a.provider.id === currentProviderId ? 0 : 1
+      const bp = b.provider.id === currentProviderId ? 0 : 1
+      if (ap !== bp) return ap - bp
+      return Number(!visionish.test(a.model.id)) - Number(!visionish.test(b.model.id))
+    })
+    return candidates[0]
+  }
+
+  /** Switch the official composer model by driving its own menu. */
+  async function switchToModel(entry) {
+    const wanted = (entry.model.displayName ?? entry.model.id).trim()
+    const trigger = composerState.trigger
+    if (!trigger) return false
+    trigger.click()
+    await new Promise((resolve) => setTimeout(resolve, 220))
+    const items = [...document.querySelectorAll('[role="menu"] [role="menuitem"], [role="listbox"] [role="option"], [data-radix-collection-item]')]
+    const needle = wanted.toLowerCase()
+    const hit = items.find((item) => item.textContent.trim().toLowerCase().includes(needle))
+    if (hit) {
+      hit.click()
+      return true
+    }
+    // Close whatever menu we opened and leave the choice to the user.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     return false
   }
 
   /* ---------- composer discovery ---------- */
   const composerState = {
     card: null, trigger: null, label: '', chip: null, banner: null,
-    quick: null, hasImages: false, busy: false,
+    quick: null, hasImages: false, busy: false, entry: null, suggest: null,
   }
 
   function findComposer() {
@@ -141,6 +193,7 @@ function init(ipcRenderer) {
     if (!card || !trigger || !chip) return
     const map = await providerIndex()
     const entry = matchModel(modelLabelOf(trigger), map)
+    composerState.entry = entry
     const image = acceptsImage(entry)
     const managed = entry !== null
     chip.classList.toggle('dshdc-chip-multi', image)
@@ -149,7 +202,7 @@ function init(ipcRenderer) {
     chip.title = image
       ? '当前模型已声明视觉输入，可直接发送图片'
       : managed
-        ? '当前模型按纯文本处理，图片会被官方引擎拒发。点击为其开启图片输入'
+        ? '当前模型按纯文本处理，上传图片会被拦截。点击为其开启图片输入'
         : '当前模型未在桌面端 Provider 中登记模态信息'
     chip.dataset.managed = managed ? '1' : ''
     chip.dataset.modelKey = managed ? `${entry.provider.id}/${entry.model.id}` : ''
@@ -185,6 +238,136 @@ function init(ipcRenderer) {
       refreshChip()
     } catch (error) {
       toast(`开启失败：${error.message}`)
+    }
+  }
+
+  /* ---------- upload gating: block media the model cannot accept ---------- */
+  let suggestTimer = null
+  async function showSuggest(kind) {
+    const { card, entry } = composerState
+    if (!card) return
+    let strip = composerState.suggest
+    if (!strip || !strip.isConnected) {
+      strip = document.createElement('div')
+      strip.className = 'dshdc-suggest'
+      card.parentElement.insertBefore(strip, card)
+      composerState.suggest = strip
+    }
+    const mediaLabel = kind === 'video' ? '视频' : '图片'
+    const modelName = entry ? (entry.model.displayName ?? entry.model.id) : (composerState.label || '当前模型')
+    strip.replaceChildren()
+    const text = document.createElement('span')
+    text.textContent = `已拦截${mediaLabel}上传：模型「${modelName}」不支持${mediaLabel}输入。`
+    strip.appendChild(text)
+
+    const rec = await recommendMediaModel(kind, entry?.provider.id)
+    if (rec) {
+      const recName = rec.model.displayName ?? rec.model.id
+      const switchBtn = document.createElement('button')
+      switchBtn.type = 'button'
+      switchBtn.className = 'dshdc-suggest-primary'
+      switchBtn.textContent = `切换到 ${recName}`
+      switchBtn.addEventListener('click', async () => {
+        const ok = await switchToModel(rec)
+        toast(ok ? `已切换到 ${recName}，请重新上传${mediaLabel}` : `请在模型菜单中手动选择 ${recName}`)
+        strip.style.display = 'none'
+      })
+      strip.appendChild(switchBtn)
+    }
+    if (entry) {
+      const enable = document.createElement('button')
+      enable.type = 'button'
+      enable.textContent = '为该模型开启图片输入'
+      enable.addEventListener('click', () => { enableVisionForCurrent(); strip.style.display = 'none' })
+      strip.appendChild(enable)
+    }
+    const dismiss = document.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '知道了'
+    dismiss.addEventListener('click', () => { strip.style.display = 'none' })
+    strip.appendChild(dismiss)
+    strip.style.display = ''
+    clearTimeout(suggestTimer)
+    suggestTimer = setTimeout(() => { if (strip.isConnected) strip.style.display = 'none' }, 12_000)
+  }
+
+  /** True and blocks the event when the media kind is unsupported. */
+  function gateMedia(kind) {
+    const entry = composerState.entry
+    if (!entry) return false // unmanaged model: leave the official flow alone
+    if (acceptsMedia(entry, kind)) return false
+    showSuggest(kind)
+    return true
+  }
+
+  function onPasteCapture(event) {
+    const items = event.clipboardData?.items ?? []
+    for (const item of items) {
+      const type = item.type ?? ''
+      if (type.startsWith('image/') && gateMedia('image')) { event.preventDefault(); event.stopImmediatePropagation(); return }
+      if (type.startsWith('video/') && gateMedia('video')) { event.preventDefault(); event.stopImmediatePropagation(); return }
+    }
+  }
+
+  function onDropCapture(event) {
+    const files = event.dataTransfer?.files ?? []
+    for (const file of files) {
+      const type = file.type ?? ''
+      if (type.startsWith('image/') && gateMedia('image')) { event.preventDefault(); event.stopImmediatePropagation(); return }
+      if (type.startsWith('video/') && gateMedia('video')) { event.preventDefault(); event.stopImmediatePropagation(); return }
+    }
+  }
+
+  function onFilePickCapture(event) {
+    const input = event.target
+    if (!(input instanceof HTMLInputElement) || input.type !== 'file') return
+    const files = [...(input.files ?? [])]
+    const blocked = files.some((file) => (file.type.startsWith('image/') && gateMedia('image')) || (file.type.startsWith('video/') && gateMedia('video')))
+    if (blocked) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      try { input.value = '' } catch { /* read-only in some engines */ }
+    }
+  }
+
+  /* ---------- official plugin list: inline Chinese annotations ---------- */
+  let pluginNotes = { at: 0, map: new Map() }
+  async function pluginNoteMap() {
+    if (pluginNotes.map.size > 0 && Date.now() - pluginNotes.at < 120_000) return pluginNotes.map
+    const data = await call('plugins:catalog').catch(() => null)
+    if (data?.items) {
+      pluginNotes = { at: Date.now(), map: new Map() }
+      for (const item of data.items) {
+        if (item.curated && item.summary) {
+          pluginNotes.map.set(item.name.toLowerCase(), item.summary)
+          pluginNotes.map.set(`@deepseek-ai/${item.name}`.toLowerCase(), item.summary)
+        }
+      }
+    }
+    return pluginNotes.map
+  }
+
+  /** Annotate plugin names inside the OFFICIAL settings dialog in place. */
+  async function annotatePluginList() {
+    if (pluginNotes.map.size === 0) await pluginNoteMap()
+    if (pluginNotes.map.size === 0) return
+    for (const dialog of document.querySelectorAll('[role="dialog"][aria-modal="true"]')) {
+      if (!dialog.querySelector('nav')) continue
+      const nodes = dialog.querySelectorAll('span, div, p, a, code')
+      for (const node of nodes) {
+        if (node.dataset.dshdcNoted !== undefined) continue
+        if (node.closest('.dshdx-section')) continue
+        // Only leaf-ish nodes whose own text is exactly a plugin name.
+        const ownText = [...node.childNodes].filter((child) => child.nodeType === Node.TEXT_NODE).map((child) => child.textContent).join('').trim()
+        if (ownText === '' || ownText.length > 44) continue
+        const summary = pluginNotes.map.get(ownText.toLowerCase())
+        if (!summary) continue
+        node.dataset.dshdcNoted = '1'
+        const note = document.createElement('span')
+        note.className = 'dshdc-plugnote'
+        note.textContent = summary
+        node.appendChild(note)
+      }
     }
   }
 
@@ -306,6 +489,14 @@ function init(ipcRenderer) {
     composerState.trigger = trigger
     if (!trigger) return
 
+    // Upload gating: capture-phase listeners block media the model rejects.
+    if (card.dataset.dshdcGated !== '1') {
+      card.dataset.dshdcGated = '1'
+      card.addEventListener('paste', onPasteCapture, true)
+      card.addEventListener('drop', onDropCapture, true)
+      card.addEventListener('change', onFilePickCapture, true)
+    }
+
     // Modality chip immediately before the model trigger.
     const chip = document.createElement('button')
     chip.type = 'button'
@@ -322,6 +513,16 @@ function init(ipcRenderer) {
     banner.style.display = 'none'
     const text = document.createElement('span')
     text.textContent = '草稿中的图片无法发送：当前模型按纯文本处理。'
+    const switchBtn = document.createElement('button')
+    switchBtn.type = 'button'
+    switchBtn.textContent = '切换到多模态模型'
+    switchBtn.addEventListener('click', async () => {
+      const rec = await recommendMediaModel('image', composerState.entry?.provider.id)
+      if (!rec) { toast('暂无可用的多模态模型，请先在「模型与多模态」中配置'); return }
+      const recName = rec.model.displayName ?? rec.model.id
+      const ok = await switchToModel(rec)
+      toast(ok ? `已切换到 ${recName}` : `请在模型菜单中手动选择 ${recName}`)
+    })
     const enable = document.createElement('button')
     enable.type = 'button'
     enable.textContent = '为此模型开启图片输入'
@@ -330,7 +531,7 @@ function init(ipcRenderer) {
     dismiss.type = 'button'
     dismiss.textContent = '知道了'
     dismiss.addEventListener('click', () => { banner.style.display = 'none' })
-    banner.append(text, enable, dismiss)
+    banner.append(text, switchBtn, enable, dismiss)
     card.parentElement.insertBefore(banner, card)
     composerState.banner = banner
 
@@ -494,6 +695,7 @@ function init(ipcRenderer) {
     const lightbox = findLightbox()
     if (lightbox) augmentLightbox(lightbox.root, lightbox.img)
     else lightboxState.root = null
+    annotatePluginList()
   }
   const throttledScan = () => {
     if (scanTimer) return

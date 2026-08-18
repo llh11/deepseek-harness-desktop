@@ -13,6 +13,7 @@
  */
 const http = require('node:http')
 const providerManager = require('./provider-manager')
+const usageTracker = require('./usage-tracker')
 
 let server = null
 let running = false
@@ -166,23 +167,61 @@ async function readBody(request) {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-/** Forward to an OpenAI-compatible upstream verbatim (auth + URL joining only). */
-async function forwardOpenAi(res, provider, key, pathSuffix, bodyText) {
+/** Forward to an OpenAI-compatible upstream verbatim (auth + URL joining only),
+ * recording token usage for statistics along the way. */
+async function forwardOpenAi(res, provider, key, pathSuffix, bodyText, model) {
   const response = await fetch(`${upstreamBase(provider)}${pathSuffix}`, {
     method: bodyText === null ? 'GET' : 'POST',
     headers: upstreamHeaders('openai', key),
     body: bodyText ?? undefined,
   })
+  const contentType = response.headers.get('content-type') ?? 'application/json'
+  const isStream = contentType.includes('event-stream')
   res.writeHead(response.status, {
-    'content-type': response.headers.get('content-type') ?? 'application/json',
-    ...(response.headers.get('content-type')?.includes('event-stream') ? { 'cache-control': 'no-cache', connection: 'keep-alive' } : {}),
+    'content-type': contentType,
+    ...(isStream ? { 'cache-control': 'no-cache', connection: 'keep-alive' } : {}),
   })
   if (response.body) {
     const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let sseBuffer = ''
+    let usage = null
+    const plainChunks = []
     for (;;) {
       const { done, value } = await reader.read()
       if (done) break
-      res.write(Buffer.from(value))
+      if (isStream) {
+        res.write(Buffer.from(value))
+        sseBuffer += decoder.decode(value, { stream: true })
+        let idx
+        while ((idx = sseBuffer.indexOf('\n')) >= 0) {
+          const line = sseBuffer.slice(0, idx).trim()
+          sseBuffer = sseBuffer.slice(idx + 1)
+          if (line.startsWith('data:') && line.includes('"usage"')) {
+            try {
+              const found = JSON.parse(line.slice(5))?.usage
+              if (found && typeof found === 'object') usage = found
+            } catch { /* partial line */ }
+          }
+        }
+      } else {
+        plainChunks.push(Buffer.from(value))
+      }
+    }
+    if (!isStream) {
+      const whole = Buffer.concat(plainChunks)
+      res.write(whole)
+      try {
+        const found = JSON.parse(whole.toString('utf8'))?.usage
+        if (found && typeof found === 'object') usage = found
+      } catch { /* non-JSON body */ }
+    }
+    if (usage) {
+      usageTracker.record({
+        providerId: provider.id, model,
+        promptTokens: usage.prompt_tokens ?? usage.input_tokens ?? 0,
+        completionTokens: usage.completion_tokens ?? usage.output_tokens ?? 0,
+      })
     }
   }
   res.end()
@@ -232,6 +271,8 @@ async function forwardAnthropic(res, provider, key, body) {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
     const chunkId = `chatcmpl-gateway-${Date.now()}`
     const toolIndexMap = new Map()
+    let inputTokens = 0
+    let outputTokens = 0
     const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`)
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
@@ -248,6 +289,8 @@ async function forwardAnthropic(res, provider, key, body) {
         if (data === '') continue
         let event
         try { event = JSON.parse(data) } catch { continue }
+        if (event.type === 'message_start' && event.message?.usage) inputTokens = event.message.usage.input_tokens ?? inputTokens
+        if (event.type === 'message_delta' && event.usage) outputTokens = event.usage.output_tokens ?? outputTokens
         if (event.type === 'message_stop') {
           res.write('data: [DONE]\n\n')
           continue
@@ -259,11 +302,21 @@ async function forwardAnthropic(res, provider, key, body) {
         for (const chunk of anthropicEventToChunks(event, payload.model, chunkId, toolIndexMap)) send(chunk)
       }
     }
+    if (inputTokens > 0 || outputTokens > 0) {
+      usageTracker.record({ providerId: provider.id, model: payload.model, promptTokens: inputTokens, completionTokens: outputTokens })
+    }
     res.end()
     return
   }
 
   const payloadJson = await response.json()
+  if (payloadJson?.usage) {
+    usageTracker.record({
+      providerId: provider.id, model: payload.model,
+      promptTokens: payloadJson.usage.input_tokens ?? 0,
+      completionTokens: payloadJson.usage.output_tokens ?? 0,
+    })
+  }
   json(res, 200, anthropicToOpenAi(payloadJson))
 }
 
@@ -274,7 +327,7 @@ async function handleChat(res, provider, bodyText) {
   try { body = JSON.parse(bodyText) } catch { return openAiError(res, 400, '请求体不是有效的 JSON') }
   try {
     if (provider.upstreamKind === 'anthropic') await forwardAnthropic(res, provider, key, body)
-    else await forwardOpenAi(res, provider, key, '/chat/completions', JSON.stringify(body))
+    else await forwardOpenAi(res, provider, key, '/chat/completions', JSON.stringify(body), body.model)
   } catch (error) {
     openAiError(res, 502, `上游请求失败：${error.message}`)
   }

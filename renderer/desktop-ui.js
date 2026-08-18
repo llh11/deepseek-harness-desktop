@@ -55,6 +55,12 @@ const ICONS = {
       'M5.5 1.5C5.5 0.671573 6.17157 0 7 0C7.82843 0 8.5 0.671573 8.5 1.5V2.5H11.5C12.3284 2.5 13 3.17157 13 4V7H14C14.8284 7 15.5 7.67157 15.5 8.5C15.5 9.32843 14.8284 10 14 10H13V13C13 13.8284 12.3284 14.5 11.5 14.5H8V13.5C8 12.6716 7.32843 12 6.5 12C5.67157 12 5 12.6716 5 13.5V14.5H2C1.17157 14.5 0.5 13.8284 0.5 13V10H1.5C2.32843 10 3 9.32843 3 8.5C3 7.67157 2.32843 7 1.5 7H0.5V4C0.5 3.17157 1.17157 2.5 2 2.5H5.5V1.5Z',
     ],
   },
+  usage: {
+    viewBox: '0 0 16 16',
+    paths: [
+      'M1.5 2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H13.5C14.0523 1.5 14.5 1.94772 14.5 2.5V13.5C14.5 14.0523 14.0523 14.5 13.5 14.5H2.5C1.94772 14.5 1.5 14.0523 1.5 13.5V2.5ZM2.94444 2.94444V13.0556H13.0556V2.94444H2.94444ZM4.33333 10.1667H5.77778V11.6111H4.33333V10.1667ZM7.22222 8H8.66667V11.6111H7.22222V8ZM10.1111 5.11111H11.5556V11.6111H10.1111V5.11111Z',
+    ],
+  },
 }
 
 /** Official nav glyph SVG (inline, currentColor — same as ui-primitives). */
@@ -144,9 +150,9 @@ const CSS = `
 const SECTION_DEFS = [
   { id: 'desktop-service', label: '内置服务', icon: ICONS.settings },
   { id: 'desktop-models', label: '模型与多模态', icon: ICONS.data },
+  { id: 'desktop-usage', label: '账户与用量', icon: ICONS.usage },
   { id: 'desktop-skills', label: 'Skill 加载器', icon: ICONS.skill },
   { id: 'desktop-mcp', label: 'MCP 插件', icon: ICONS.plugins },
-  { id: 'desktop-plugins', label: '内置插件说明', icon: ICONS.puzzle },
   { id: 'desktop-update', label: '更新与关于', icon: ICONS.download },
 ]
 
@@ -946,52 +952,95 @@ function init(ipcRenderer) {
     )
   }
 
-  function buildPluginsSection() {
+  function buildUsageSection() {
     const root = el('div')
-    const listHost = el('div', { class: 'dshdx-stack' })
-    const searchInput = input({ type: 'search', placeholder: '搜索插件名 / 功能…' })
-    searchInput.className = 'dshdx-input dshdx-search'
-    let catalog = { items: [], categories: [] }
+    const balanceHost = el('div', { class: 'dshdx-stack' })
+    const statsHost = el('div', { class: 'dshdx-stack' })
+    const recentHost = el('div', { class: 'dshdx-stack' })
 
-    const paint = () => {
-      const keyword = searchInput.value.trim().toLowerCase()
-      const hits = catalog.items.filter((item) => keyword === ''
-        || item.name.toLowerCase().includes(keyword)
-        || (item.summary ?? '').toLowerCase().includes(keyword)
-        || item.category.includes(keyword))
-      const byCategory = new Map()
-      for (const item of hits) {
-        if (!byCategory.has(item.category)) byCategory.set(item.category, [])
-        byCategory.get(item.category).push(item)
+    const fmtTokens = (n) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)} M` : n >= 1000 ? `${(n / 1000).toFixed(1)} K` : String(n)
+    const sumRow = (label, data) => el('div', { class: 'dshdx-card', style: 'flex:1' },
+      el('span', { class: 'dshdx-caption', text: label }),
+      el('div', { class: 'dshdx-rowline', style: 'justify-content:space-between' },
+        el('span', { class: 'dshdx-cardtitle', text: `${fmtTokens(data.prompt + data.completion)} tokens` }),
+        data.cost != null ? tag(`≈ ¥${data.cost.toFixed(3)}`) : null,
+      ),
+      el('span', { class: 'dshdx-caption', text: `${data.requests} 次请求 · 输入 ${fmtTokens(data.prompt)} · 输出 ${fmtTokens(data.completion)}` }),
+    )
+
+    async function refreshBalances() {
+      balanceHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '正在查询各 Provider 账户余额…' }))
+      try {
+        const rows = await call('providers:balances')
+        balanceHost.replaceChildren(rows.length === 0
+          ? el('p', { class: 'dshdx-caption', text: '尚未配置任何 Provider。请先在「模型与多模态」中添加并保存 API Key。' })
+          : rows.map((row) => el('div', { class: 'dshdx-rowline' },
+              el('span', { class: 'dshdx-cardtitle', text: row.displayName ?? row.id }),
+              row.gateway ? tag('经网关') : null,
+              row.balance != null
+                ? el('span', { class: 'dshdx-cardtitle', style: 'margin-left:auto', text: row.balance })
+                : el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: row.note ?? '该服务商不支持余额查询' }),
+            )))
+      } catch {
+        balanceHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '余额查询失败，请稍后重试。' }))
       }
-      listHost.replaceChildren(hits.length === 0
-        ? el('p', { class: 'dshdx-caption', text: '没有匹配的插件。' })
-        : [...byCategory.entries()].map(([category, items]) => el('div', { class: 'dshdx-card' },
-            el('div', { class: 'dshdx-cardhead' },
-              el('span', { class: 'dshdx-cardtitle', text: category }),
-              tag(`${items.length} 个`),
-            ),
-            el('div', { class: 'dshdx-stack' }, items.map((item) => el('div', {},
-              el('div', { class: 'dshdx-rowline' },
-                el('span', { class: 'dshdx-cardtitle', text: item.name }),
-                item.version ? tag(item.version) : null,
-                item.curated ? tag('已注解', 'dshdx-tag-ok') : null,
-              ),
-              el('p', { class: 'dshdx-caption', text: item.summary || '（该插件暂无说明，可查阅官方仓库同名包文档）' }),
-            ))),
-          )))
     }
-    searchInput.addEventListener('input', paint)
-    call('plugins:catalog').then((data) => { catalog = data; paint() }).catch(() => {})
+
+    async function refreshStats() {
+      try {
+        const stats = await call('usage:stats')
+        statsHost.replaceChildren(
+          el('div', { class: 'dshdx-rowline', style: 'align-items:stretch' },
+            sumRow('今日', stats.today), sumRow('近 7 日', stats.week), sumRow('累计', stats.total)),
+          stats.models.length > 0
+            ? el('div', { class: 'dshdx-card' },
+                el('span', { class: 'dshdx-cardtitle', text: '按模型统计' }),
+                el('div', { class: 'dshdx-stack' }, stats.models.map((m) => el('div', { class: 'dshdx-rowline' },
+                  el('span', { class: 'dshdx-sub', text: m.model }),
+                  el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `${m.requests} 次 · ${fmtTokens(m.prompt + m.completion)} tokens${m.cost != null ? ` · ≈ ¥${m.cost.toFixed(3)}` : ''}` }),
+                ))))
+            : null,
+        )
+        recentHost.replaceChildren(stats.recent.length === 0
+          ? el('p', { class: 'dshdx-caption', text: '暂无用量记录。经本地翻译网关发出的请求会自动记录 token 用量。' })
+          : stats.recent.map((r) => el('div', { class: 'dshdx-rowline' },
+              el('span', { class: 'dshdx-caption', text: new Date(r.ts).toLocaleString() }),
+              el('span', { class: 'dshdx-sub', text: `${r.providerId} / ${r.model}` }),
+              el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `输入 ${fmtTokens(r.promptTokens)} · 输出 ${fmtTokens(r.completionTokens)}${r.cost != null ? ` · ≈ ¥${r.cost.toFixed(4)}` : ''}` }),
+            )))
+      } catch {
+        statsHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '用量统计读取失败。' }))
+      }
+    }
 
     root.replaceChildren(
-      el('h3', { class: 'dshdx-title', text: '内置插件说明' }),
-      el('p', { class: 'dshdx-intro', text: '官方引擎由一系列内置插件装配而成（Cordis 插件体系）。这里列出随服务安装的每个插件的用途；标注「已注解」的条目带有中文功能说明。桌面端的 MCP 配置即通过其中的 dsh-mcp-client 插件挂载。' }),
+      el('h3', { class: 'dshdx-title', text: '账户与用量' }),
+      el('p', { class: 'dshdx-intro', text: '查看当前 API Key 对应账户的余额，并统计每次任务的 token 消耗与估算费用。余额支持 DeepSeek 官方账户；用量由本地翻译网关在转发请求时自动记录。' }),
       el('div', { class: 'dshdx-card' },
-        el('div', { class: 'dshdx-cardhead' }, el('span', { class: 'dshdx-cardtitle', text: '插件目录' }), searchInput),
-        listHost,
+        el('div', { class: 'dshdx-cardhead' },
+          el('span', { class: 'dshdx-cardtitle', text: '账户余额' }),
+          el('div', { class: 'dshdx-cardactions' }, btn('刷新余额', 'secondary', refreshBalances, true)),
+        ),
+        balanceHost,
+      ),
+      el('div', { class: 'dshdx-card' },
+        el('div', { class: 'dshdx-cardhead' },
+          el('span', { class: 'dshdx-cardtitle', text: '用量统计' }),
+          el('div', { class: 'dshdx-cardactions' },
+            btn('刷新', 'secondary', refreshStats, true),
+            btn('清空记录', 'danger', async () => { await safely('usage:clear'); refreshStats() }, true),
+          ),
+        ),
+        statsHost,
+        el('p', { class: 'dshdx-caption', text: '提示：仅统计经本地翻译网关转发的请求。在「模型与多模态」中为 Provider 勾选「经本地翻译网关接入」即可纳入统计。' }),
+      ),
+      el('div', { class: 'dshdx-card' },
+        el('span', { class: 'dshdx-cardtitle', text: '最近任务消耗' }),
+        recentHost,
       ),
     )
+    refreshBalances()
+    refreshStats()
     return root
   }
 
@@ -1031,6 +1080,8 @@ function init(ipcRenderer) {
 
     const renderUpdates = (result) => {
       const official = result.official
+      const mirror = result.mirror
+      const mirrorDegraded = Boolean(mirror?.error) || Boolean(mirror?.activeUrl && mirror?.url && mirror.activeUrl !== mirror.url)
       officialBody.replaceChildren(
         el('div', { class: 'dshdx-rowline' },
           el('span', { text: `本地引擎：${official.installed ?? '未知'}　npm 最新：${official.latest ?? '获取失败'}` }),
@@ -1038,8 +1089,8 @@ function init(ipcRenderer) {
         ),
         official.registry ? el('p', { class: 'dshdx-caption', text: `来源：${official.registry}` }) : null,
         official.error ? el('p', { class: 'dshdx-issue', text: official.error }) : null,
-        result.mirror?.url ? el('p', { class: 'dshdx-caption', text: `加速镜像：${result.mirror.activeUrl ?? result.mirror.url}${result.mirror.latest ? `（镜像版本 ${result.mirror.latest}）` : ''}${result.mirror.activeUrl && result.mirror.activeUrl !== result.mirror.url ? '（主地址不可用，已切换备用地址）' : ''}` }) : null,
-        result.mirror?.error ? el('p', { class: 'dshdx-issue', text: `加速镜像异常：${result.mirror.error}` }) : null,
+        mirrorDegraded && mirror?.error ? el('p', { class: 'dshdx-issue', text: `加速镜像异常：${mirror.error}` }) : null,
+        mirrorDegraded && mirror?.activeUrl ? el('p', { class: 'dshdx-issue', text: `加速镜像主地址不可用，已自动切换备用地址：${mirror.activeUrl}${mirror.latest ? `（镜像版本 ${mirror.latest}）` : ''}` }) : null,
         official.sources.length > 0 ? el('p', { class: 'dshdx-caption', text: `可用来源：${official.sources.map((item) => `${item.label}${item.version ? `（${item.version}）` : ''}`).join('；')}` }) : null,
         el('p', { class: 'dshdx-caption', text: '一键更新优先从加速镜像下载预构建引擎包（无需走 npm 官方源），镜像不可用时自动回退到随包 npm 安装；更新版安装到用户目录并优先于内置版本运行。' }),
       )
@@ -1057,6 +1108,7 @@ function init(ipcRenderer) {
           downloadButton.disabled = false
         }
       }, true)
+      const desktopDegraded = Boolean(desktop.error) || Boolean(desktop.source && !desktop.source.includes('199.7.140.33'))
       desktopBody.replaceChildren(
         el('div', { class: 'dshdx-rowline' },
           el('span', { text: `当前版本：${desktop.current}${desktop.latest ? `　最新版本：${desktop.latest}` : ''}` }),
@@ -1064,17 +1116,36 @@ function init(ipcRenderer) {
         ),
         desktop.error ? el('p', { class: 'dshdx-issue', text: desktop.error }) : null,
         desktop.notes ? el('p', { class: 'dshdx-caption', text: desktop.notes }) : null,
-        desktop.source ? el('p', { class: 'dshdx-caption', text: `更新源：${desktop.source}` }) : null,
+        desktopDegraded && desktop.source ? el('p', { class: 'dshdx-issue', text: `默认更新源不可用，当前生效来源：${desktop.source}` }) : null,
         el('div', { class: 'dshdx-cardactions' },
           desktop.updateAvailable && desktop.url ? downloadButton : null,
           desktop.url ? btn('在浏览器中打开下载页', 'secondary', () => call('shell:openExternal', desktop.url), true) : null,
         ),
         el('p', { class: 'dshdx-caption', text: `上次检查：${new Date(result.checkedAt).toLocaleString()}` }),
       )
+      // 仅在主地址不可用时才展示备用源切换区（需求：正常时不出现替换选项）。
+      if (mirrorDegraded || desktopDegraded) {
+        fallbackBox.classList.remove('dshdx-hidden')
+        fallbackNotice.textContent = desktopDegraded && mirrorDegraded
+          ? '默认更新源与加速镜像均不可用，可临时改用下方自定义地址。'
+          : desktopDegraded
+            ? '默认更新源（199.7.140.33:8010）暂时不可用，可临时改用自定义更新源。'
+            : '加速镜像主地址暂时不可用，可临时改用自定义镜像地址。'
+      } else {
+        fallbackBox.classList.add('dshdx-hidden')
+      }
     }
 
     const feedInput = input({ type: 'text', placeholder: '默认绑定官方镜像站 http://199.7.140.33:8010/feed.json' })
-    const mirrorInput = input({ type: 'text', placeholder: '默认 http://199.7.140.33:8010，该地址不可用时才启用备用地址' })
+    const mirrorInput = input({ type: 'text', placeholder: '默认 http://199.7.140.33:8010，该地址不可用时自动启用备用地址' })
+    const fallbackNotice = el('p', { class: 'dshdx-issue', text: '' })
+    const fallbackBox = el('div', { class: 'dshdx-card dshdx-hidden' },
+      el('span', { class: 'dshdx-cardtitle', text: '备用更新地址' }),
+      fallbackNotice,
+      field('自定义加速镜像地址', mirrorInput),
+      field('自定义更新源地址（JSON：{ version, url, notes }）', feedInput),
+      el('p', { class: 'dshdx-caption', text: '仅在默认地址（199.7.140.33:8010）无法访问时才需要修改；留空即恢复默认。默认地址恢复后可清空此处。' }),
+    )
     call('app:info').then((info) => {
       root.replaceChildren(
         el('h3', { class: 'dshdx-title', text: '更新与关于' }),
@@ -1082,7 +1153,6 @@ function init(ipcRenderer) {
         el('div', { class: 'dshdx-card' },
           el('span', { class: 'dshdx-cardtitle', text: '官方引擎（@deepseek-ai/dsh）' }),
           officialBody, progress,
-          field('加速更新镜像地址（默认绑定 199.7.140.33:8010；该地址不可用时自动启用备用地址）', mirrorInput),
           el('div', { class: 'dshdx-cardactions' },
             btn('立即检查', 'secondary', async () => { toast('正在检查更新…'); renderUpdates(await safely('updates:check')) }),
             applyButton,
@@ -1096,13 +1166,14 @@ function init(ipcRenderer) {
         el('div', { class: 'dshdx-card' },
           el('span', { class: 'dshdx-cardtitle', text: `桌面版 ${info.version}` }),
           desktopBody,
-          field('更新源地址（JSON：{ version, url, notes }；默认绑定官方镜像站，仅当主地址不可用时才回退备用源）', feedInput),
           el('p', { class: 'dshdx-caption', text: `DSH_HOME：${info.dshHome}` }),
           el('div', { class: 'dshdx-cardactions' },
+            btn('GitHub 仓库', 'secondary', () => call('shell:openExternal', 'https://github.com/llh11/deepseek-harness-desktop'), true),
             btn('官方仓库', 'secondary', () => call('shell:openExternal', 'https://github.com/deepseek-ai/deepseek-harness'), true),
             btn('使用文档', 'secondary', () => call('shell:openExternal', 'https://github.com/deepseek-ai/deepseek-harness/blob/main/README.zh.md'), true),
           ),
         ),
+        fallbackBox,
       )
       call('settings:get').then((settings) => {
         feedInput.value = settings.updateFeedUrl ?? ''
@@ -1125,9 +1196,9 @@ function init(ipcRenderer) {
   const SECTION_BUILDERS = {
     'desktop-service': buildServiceSection,
     'desktop-models': buildModelsSection,
+    'desktop-usage': buildUsageSection,
     'desktop-skills': buildSkillsSection,
     'desktop-mcp': buildMcpSection,
-    'desktop-plugins': buildPluginsSection,
     'desktop-update': buildUpdateSection,
   }
 

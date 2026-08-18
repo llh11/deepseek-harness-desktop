@@ -16,6 +16,7 @@ const providers = require('./lib/provider-manager')
 const gateway = require('./lib/gateway')
 const updater = require('./lib/updater')
 const plugins = require('./lib/plugin-explainer')
+const usage = require('./lib/usage-tracker')
 const { ensureDesktopDir } = require('./lib/paths')
 
 let mainWindow = null
@@ -155,6 +156,10 @@ function registerIpc() {
   ipcMain.handle('providers:remove', (_event, id) => { const result = providers.remove(id); syncGateway(); return result })
   ipcMain.handle('providers:fetchModels', (_event, payload) => providers.fetchModels(payload))
   ipcMain.handle('providers:suggestInput', (_event, modelId) => providers.suggestInput(modelId))
+  ipcMain.handle('providers:balances', () => providers.balances())
+
+  ipcMain.handle('usage:stats', () => usage.stats())
+  ipcMain.handle('usage:clear', () => { usage.clear(); return usage.stats() })
 
   ipcMain.handle('updates:check', () => updater.checkAll())
   ipcMain.handle('updates:applyOfficial', () => updater.applyOfficialUpdate((line) => sendToWindows('updates:progress', line)))

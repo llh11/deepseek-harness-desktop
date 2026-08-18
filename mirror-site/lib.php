@@ -83,3 +83,23 @@ function resolve_download($rel) {
     if (!str_starts_with(str_replace('\\', '/', $full), str_replace('\\', '/', $base) . '/')) return null;
     return $full;
 }
+
+/** Editable site content (QQ group, GitHub link, screenshots). Admin changes
+ * write files/state/site-config.json; packaged defaults ship in code. */
+function site_config() {
+    $defaults = [
+        'qq_number'    => '1017339599',
+        'qq_link'      => 'https://qm.qq.com/q/LnuRC7T5my',
+        'qq_qr'        => 'assets/qq-qrcode.png',
+        'github_url'   => 'https://github.com/llh11/deepseek-harness-desktop',
+        'official_url' => 'https://www.deepseek.com/harness/',
+        'screens'      => [],
+    ];
+    $saved = read_manifest('site-config.json');
+    return array_merge($defaults, is_array($saved) ? array_intersect_key($saved, $defaults) : []);
+}
+
+function save_site_config($cfg) {
+    $clean = array_intersect_key($cfg, array_flip(['qq_number', 'qq_link', 'qq_qr', 'github_url', 'official_url', 'screens']));
+    write_manifest('site-config.json', $clean);
+}

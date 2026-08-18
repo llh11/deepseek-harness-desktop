@@ -206,4 +206,47 @@ async function fetchModels({ baseURL, apiKey, upstreamKind, providerId }) {
   return rows.map((row) => String(row?.id ?? '')).filter((id) => id !== '')
 }
 
-module.exports = { list, save, remove, fetchModels, suggestInput, getProvider, resolveKey, envName, dshBaseURL, projectToSettings }
+/** Query the account balance for every provider that has a stored key.
+ * Currently supports the DeepSeek billing endpoint; other providers report
+ * "not supported" instead of failing. */
+async function balances() {
+  const providers = loadStore().providers
+  const rows = []
+  for (const provider of providers) {
+    const key = resolveKey(provider.id)
+    const baseRow = { id: provider.id, displayName: provider.displayName, gateway: Boolean(provider.viaGateway), balance: null, note: null }
+    if (key === '') {
+      rows.push({ ...baseRow, note: '未保存 API Key' })
+      continue
+    }
+    const host = String(provider.upstreamBaseURL ?? '').toLowerCase()
+    if (!host.includes('deepseek')) {
+      rows.push({ ...baseRow, note: '该服务商暂不支持余额查询' })
+      continue
+    }
+    try {
+      const root = provider.upstreamBaseURL.replace(/\/+$/, '').replace(/\/v\d+$/, '')
+      const response = await fetch(`${root}/user/balance`, {
+        headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(12_000),
+      })
+      if (!response.ok) {
+        rows.push({ ...baseRow, note: `查询失败（HTTP ${response.status}）` })
+        continue
+      }
+      const body = await response.json()
+      const infos = Array.isArray(body?.balance_infos) ? body.balance_infos : []
+      if (infos.length === 0) {
+        rows.push({ ...baseRow, note: '未返回余额信息' })
+        continue
+      }
+      baseRow.balance = infos.map((info) => `${info.total_balance} ${info.currency === 'CNY' ? 'CNY' : (info.currency ?? '')}`.trim()).join(' / ')
+      rows.push(baseRow)
+    } catch (error) {
+      rows.push({ ...baseRow, note: `查询失败：${error.message}` })
+    }
+  }
+  return rows
+}
+
+module.exports = { list, save, remove, fetchModels, suggestInput, getProvider, resolveKey, envName, dshBaseURL, projectToSettings, balances }
