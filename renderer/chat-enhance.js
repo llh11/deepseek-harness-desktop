@@ -1,0 +1,507 @@
+'use strict'
+/**
+ * Chat-flow bridge (v1.3): integrates the desktop's multimodal capability and
+ * the Skill/MCP quick-insert palette directly into the OFFICIAL conversation
+ * composer, without modifying any official file.
+ *
+ *  - Reads the composer's model trigger to learn the active model, matches it
+ *    against the desktop provider registry, and shows a modality chip
+ *    (多模态 / 纯文本) next to the model selector.
+ *  - When draft images coexist with a text-only model — after attaching or
+ *    after a model switch — an inline banner offers one-click enablement of
+ *    image input for that model (writes the official settings.yaml modality
+ *    declaration), so the conversation flow never breaks on a rejected send.
+ *  - A quick-insert trigger beside the official command button opens a palette
+ *    of installed Skills and MCP tools; choosing one inserts its invocation
+ *    token into the draft at the caret.
+ *
+ * @module dsh-desktop/chat-enhance
+ */
+
+const CSS = `
+.dshdc-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); background: transparent; color: var(--dsw-alias-label-tertiary, #888); font-size: 12px; line-height: 18px; cursor: default; white-space: nowrap; font-family: inherit; }
+.dshdc-chip-multi { color: var(--dsw-alias-state-success-primary, #3fb96c); border-color: var(--dsw-alias-state-success-primary, #3fb96c); }
+.dshdc-chip-action { cursor: pointer; color: var(--dsw-alias-label-primary, #ddd); }
+.dshdc-chip-action:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
+.dshdc-banner { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--dsw-alias-state-warn-label, #d9a13b); border-radius: 10px; color: var(--dsw-alias-label-secondary, #aaa); font-size: 12.5px; line-height: 18px; font-family: inherit; }
+.dshdc-banner button { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3)); background: transparent; color: var(--dsw-alias-label-primary, #ddd); border-radius: 12px; height: 24px; padding: 0 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.dshdc-banner button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
+.dshdc-quick { position: relative; }
+.dshdc-quick-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); background: transparent; color: var(--dsw-alias-label-tertiary, #888); cursor: pointer; font-family: inherit; }
+.dshdc-quick-btn:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); color: var(--dsw-alias-label-primary, #ddd); }
+.dshdc-panel { position: absolute; bottom: 36px; left: 0; z-index: 1150; width: 320px; max-height: 320px; display: flex; flex-direction: column; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); background: var(--dsw-alias-bg-layer-2, #1b1f27); box-shadow: 0 12px 32px rgba(0,0,0,.35); overflow: hidden; font-family: inherit; }
+.dshdc-panel input { margin: 8px; height: 30px; padding: 3px 10px; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); border-radius: 8px; background: transparent; color: var(--dsw-alias-label-primary, #ddd); font-size: 13px; font-family: inherit; }
+.dshdc-panel input:focus { outline: none; border-color: var(--dsw-alias-border-activated, #4d7cfe); }
+.dshdc-list { overflow: auto; padding: 0 4px 8px; }
+.dshdc-group { padding: 6px 10px 2px; font-size: 11px; color: var(--dsw-alias-label-quaternary, #777); }
+.dshdc-item { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; border: none; background: transparent; padding: 6px 10px; border-radius: 8px; cursor: pointer; color: var(--dsw-alias-label-primary, #ddd); font-size: 13px; font-family: inherit; }
+.dshdc-item:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
+.dshdc-item small { color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dshdc-empty { padding: 14px; text-align: center; color: var(--dsw-alias-label-quaternary, #777); font-size: 12px; }
+`
+
+/** Initialize the chat-flow bridge. @param ipcRenderer - Electron ipcRenderer. */
+function init(ipcRenderer) {
+  const stylesheet = new CSSStyleSheet()
+  stylesheet.replaceSync(CSS)
+  const call = (channel, payload) => ipcRenderer.invoke(channel, payload)
+
+  /** Debounced toast reuse of the desktop panel's channel. */
+  function toast(message) {
+    let node = document.querySelector('.dshdx-toast')
+    if (!node) {
+      node = document.createElement('div')
+      node.className = 'dshdx-toast'
+      node.style.cssText = 'position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:1300;background:var(--dsw-alias-bg-inverse,#222);color:var(--dsw-alias-label-inverse,#eee);padding:10px 18px;border-radius:10px;font-size:13px;max-width:70vw;'
+      document.documentElement.appendChild(node)
+    }
+    node.textContent = message
+    node.classList.remove('dshdx-hidden')
+    clearTimeout(toast.timer)
+    toast.timer = setTimeout(() => { node.style.display = 'none' }, 3400)
+    node.style.display = ''
+  }
+
+  /* ---------- provider modality knowledge ---------- */
+  let providersCache = []
+  let providersLoadedAt = 0
+  async function providerIndex() {
+    if (Date.now() - providersLoadedAt > 30_000 || providersCache.length === 0) {
+      try {
+        providersCache = await call('providers:list')
+        providersLoadedAt = Date.now()
+      } catch { /* keep stale */ }
+    }
+    // Map: lowercase model id → { provider, model }
+    const map = new Map()
+    for (const provider of providersCache) {
+      for (const model of provider.models ?? []) {
+        map.set(`${provider.id}/${model.id}`.toLowerCase(), { provider, model })
+        map.set(model.id.toLowerCase(), { provider, model })
+        const display = (model.displayName ?? model.id).toLowerCase()
+        map.set(display, { provider, model })
+      }
+    }
+    return map
+  }
+
+  /** Best-effort match of the composer label to a managed provider model. */
+  function matchModel(label, map) {
+    const needle = String(label ?? '').trim().toLowerCase()
+    if (needle === '') return null
+    if (map.has(needle)) return map.get(needle)
+    for (const [key, value] of map) {
+      if (needle.includes(key) || key.includes(needle)) return value
+    }
+    return null
+  }
+
+  function acceptsImage(entry) {
+    if (!entry) return false
+    const model = entry.model
+    if (Array.isArray(model.input) && model.input.includes('image')) return true
+    if (!model.input && Array.isArray(entry.provider.defaultInput)) return entry.provider.defaultInput.includes('image')
+    return false
+  }
+
+  /* ---------- composer discovery ---------- */
+  const composerState = {
+    card: null, trigger: null, label: '', chip: null, banner: null,
+    quick: null, hasImages: false, busy: false,
+  }
+
+  function findComposer() {
+    return document.querySelector('[data-composer-card]')
+  }
+
+  function findModelTrigger(card) {
+    for (const button of card.querySelectorAll('button[aria-haspopup="menu"]')) {
+      // The ModelSelect trigger carries a chevron and a plain-text label span.
+      if (button.querySelector('svg') && button.textContent.trim() !== '') return button
+    }
+    return null
+  }
+
+  function modelLabelOf(trigger) {
+    const span = trigger?.querySelector('span')
+    return (span?.textContent ?? trigger?.textContent ?? '').split('·')[0].trim()
+  }
+
+  function draftHasImages(card) {
+    return card.querySelectorAll('img').length > 0
+  }
+
+  function findTextarea(card) {
+    return card.querySelector('textarea')
+  }
+
+  /* ---------- modality chip ---------- */
+  async function refreshChip() {
+    const { card, trigger, chip } = composerState
+    if (!card || !trigger || !chip) return
+    const map = await providerIndex()
+    const entry = matchModel(modelLabelOf(trigger), map)
+    const image = acceptsImage(entry)
+    const managed = entry !== null
+    chip.classList.toggle('dshdc-chip-multi', image)
+    chip.classList.toggle('dshdc-chip-action', !image && managed)
+    chip.textContent = image ? '多模态 · 支持图片' : '纯文本'
+    chip.title = image
+      ? '当前模型已声明视觉输入，可直接发送图片'
+      : managed
+        ? '当前模型按纯文本处理，图片会被官方引擎拒发。点击为其开启图片输入'
+        : '当前模型未在桌面端 Provider 中登记模态信息'
+    chip.dataset.managed = managed ? '1' : ''
+    chip.dataset.modelKey = managed ? `${entry.provider.id}/${entry.model.id}` : ''
+    refreshBanner()
+  }
+
+  function refreshBanner() {
+    const { card, chip, banner } = composerState
+    if (!card || !chip) return
+    const show = composerState.hasImages && !chip.classList.contains('dshdc-chip-multi') && chip.dataset.managed === '1'
+    if (!banner) return
+    banner.style.display = show ? '' : 'none'
+  }
+
+  async function enableVisionForCurrent() {
+    const key = composerState.chip?.dataset.modelKey
+    if (!key) return
+    const map = await providerIndex()
+    const entry = map.get(key.toLowerCase())
+    if (!entry) return
+    const { provider } = entry
+    const models = provider.models.map((model) => (
+      model.id === entry.model.id ? { ...model, input: ['text', 'image'] } : model
+    ))
+    try {
+      await call('providers:save', {
+        id: provider.id, displayName: provider.displayName, upstreamKind: provider.upstreamKind,
+        upstreamBaseURL: provider.upstreamBaseURL, apiKey: '', viaGateway: provider.viaGateway,
+        defaultInput: provider.defaultInput, models,
+      })
+      providersLoadedAt = 0
+      toast(`已为 ${entry.model.id} 开启图片输入（settings.yaml 已更新），重新发送即可`)
+      refreshChip()
+    } catch (error) {
+      toast(`开启失败：${error.message}`)
+    }
+  }
+
+  /* ---------- Skill / MCP quick-insert palette ---------- */
+  let quickCache = { at: 0, skills: [], mcp: [] }
+  async function quickData() {
+    if (Date.now() - quickCache.at < 20_000) return quickCache
+    const [skills, mcp] = await Promise.all([
+      call('skills:list').catch(() => ({ items: [] })),
+      call('mcp:state').catch(() => ({ servers: [] })),
+    ])
+    quickCache = {
+      at: Date.now(),
+      skills: (skills.items ?? []).filter((item) => !item.shadowedBy),
+      mcp: (mcp.servers ?? []).filter((server) => server.enabled),
+    }
+    return quickCache
+  }
+
+  function insertIntoDraft(card, text) {
+    const textarea = findTextarea(card)
+    if (!textarea) return
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+    const start = textarea.selectionStart ?? textarea.value.length
+    const end = textarea.selectionEnd ?? start
+    const next = `${textarea.value.slice(0, start)}${text}${textarea.value.slice(end)}`
+    if (setter) setter.call(textarea, next)
+    else textarea.value = next
+    textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    const caret = start + text.length
+    requestAnimationFrame(() => {
+      textarea.focus()
+      try { textarea.setSelectionRange(caret, caret) } catch { /* detached */ }
+    })
+  }
+
+  function closePanel() {
+    const panel = composerState.quick?.querySelector('.dshdc-panel')
+    if (panel) panel.remove()
+    document.removeEventListener('mousedown', outsideClose, true)
+  }
+  function outsideClose(event) {
+    if (composerState.quick && !composerState.quick.contains(event.target)) closePanel()
+  }
+
+  async function openPanel(card) {
+    closePanel()
+    const host = composerState.quick
+    if (!host) return
+    const panel = document.createElement('div')
+    panel.className = 'dshdc-panel'
+    const search = document.createElement('input')
+    search.type = 'search'
+    search.placeholder = '搜索 Skill 或 MCP 工具…'
+    const list = document.createElement('div')
+    list.className = 'dshdc-list'
+    panel.append(search, list)
+    host.appendChild(panel)
+    document.addEventListener('mousedown', outsideClose, true)
+    search.focus()
+
+    const { skills, mcp } = await quickData()
+    const render = () => {
+      const needle = search.value.trim().toLowerCase()
+      list.replaceChildren()
+      const hit = (text) => needle === '' || String(text ?? '').toLowerCase().includes(needle)
+      const addGroup = (label) => {
+        const g = document.createElement('div')
+        g.className = 'dshdc-group'
+        g.textContent = label
+        list.appendChild(g)
+      }
+      const addItem = (title, sub, onPick) => {
+        const item = document.createElement('button')
+        item.type = 'button'
+        item.className = 'dshdc-item'
+        const strong = document.createElement('span')
+        strong.textContent = title
+        item.appendChild(strong)
+        if (sub) {
+          const small = document.createElement('small')
+          small.textContent = sub
+          item.appendChild(small)
+        }
+        item.addEventListener('click', () => { onPick(); closePanel() })
+        list.appendChild(item)
+      }
+      const skillHits = skills.filter((item) => hit(item.name) || hit(item.description))
+      const mcpHits = mcp.filter((server) => hit(server.name))
+      if (skillHits.length > 0) {
+        addGroup('Skills（插入 / 调用）')
+        for (const item of skillHits.slice(0, 12)) {
+          addItem(`/${item.name}`, item.description || item.rootLabel, () => insertIntoDraft(card, `/${item.name} `))
+        }
+      }
+      if (mcpHits.length > 0) {
+        addGroup('MCP 服务器（插入工具调用提示）')
+        for (const server of mcpHits.slice(0, 12)) {
+          addItem(server.name, server.transport === 'stdio' ? server.command : server.url, () => insertIntoDraft(card, `请使用 MCP 服务器 ${server.name}（工具命名空间 mcp__${server.name}__*）：`))
+        }
+      }
+      if (skillHits.length === 0 && mcpHits.length === 0) {
+        const empty = document.createElement('div')
+        empty.className = 'dshdc-empty'
+        empty.textContent = '无匹配项。可在设置 → Skill 加载器 / MCP 插件中添加。'
+        list.appendChild(empty)
+      }
+    }
+    search.addEventListener('input', render)
+    search.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePanel() })
+    render()
+  }
+
+  /* ---------- composer augmentation ---------- */
+  function augment(card) {
+    if (composerState.card === card && card.contains(composerState.chip)) return
+    composerState.card = card
+    const trigger = findModelTrigger(card)
+    composerState.trigger = trigger
+    if (!trigger) return
+
+    // Modality chip immediately before the model trigger.
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = 'dshdc-chip'
+    chip.addEventListener('click', () => {
+      if (chip.dataset.managed === '1' && !chip.classList.contains('dshdc-chip-multi')) enableVisionForCurrent()
+    })
+    trigger.parentElement.insertBefore(chip, trigger)
+    composerState.chip = chip
+
+    // Guidance banner above the composer card.
+    const banner = document.createElement('div')
+    banner.className = 'dshdc-banner'
+    banner.style.display = 'none'
+    const text = document.createElement('span')
+    text.textContent = '草稿中的图片无法发送：当前模型按纯文本处理。'
+    const enable = document.createElement('button')
+    enable.type = 'button'
+    enable.textContent = '为此模型开启图片输入'
+    enable.addEventListener('click', enableVisionForCurrent)
+    const dismiss = document.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = '知道了'
+    dismiss.addEventListener('click', () => { banner.style.display = 'none' })
+    banner.append(text, enable, dismiss)
+    card.parentElement.insertBefore(banner, card)
+    composerState.banner = banner
+
+    // Quick-insert palette beside the official command ("+") button.
+    const commands = card.querySelector('button[aria-haspopup="listbox"]')
+    if (commands) {
+      const quick = document.createElement('span')
+      quick.className = 'dshdc-quick'
+      const qbtn = document.createElement('button')
+      qbtn.type = 'button'
+      qbtn.className = 'dshdc-quick-btn'
+      qbtn.title = 'Skill / MCP 速查插入'
+      qbtn.textContent = '#'
+      qbtn.setAttribute('aria-label', 'Skill 与 MCP 速查')
+      qbtn.addEventListener('mousedown', (event) => event.preventDefault())
+      qbtn.addEventListener('click', () => openPanel(card))
+      quick.appendChild(qbtn)
+      commands.parentElement.insertBefore(quick, commands.nextSibling)
+      composerState.quick = quick
+    }
+
+    refreshChip()
+  }
+
+  /* ---------- lightbox fix: zoom / pan / download ----------
+   * The official ImageLightbox renders the original image at fit-to-viewport
+   * size with no zoom and no download (documented upstream limitation). This
+   * bridge augments any mounted lightbox in place: wheel zoom around the
+   * cursor, drag panning while zoomed, double-click reset, and a download
+   * button beside the close control. */
+  const lightboxState = { root: null, scale: 1, tx: 0, ty: 0 }
+
+  function findLightbox() {
+    for (const el of document.body.children) {
+      if (!(el instanceof HTMLElement)) continue
+      if (el.getAttribute('role') !== 'dialog' || el.getAttribute('aria-modal') !== 'true') continue
+      if (el.querySelector('nav')) continue // the settings dialog is not a lightbox
+      const img = el.querySelector('img')
+      if (img && el.querySelector('button')) return { root: el, img }
+    }
+    return null
+  }
+
+  function applyLightboxTransform(img) {
+    img.style.transform = `translate(${lightboxState.tx}px, ${lightboxState.ty}px) scale(${lightboxState.scale})`
+    img.style.transition = 'transform .08s ease-out'
+    img.style.maxWidth = 'none'
+    img.style.cursor = lightboxState.scale > 1 ? 'grab' : 'zoom-in'
+  }
+
+  function resetLightbox(img) {
+    lightboxState.scale = 1
+    lightboxState.tx = 0
+    lightboxState.ty = 0
+    applyLightboxTransform(img)
+    const meter = lightboxState.root?.querySelector('.dshdc-zoom-meter')
+    if (meter) meter.textContent = '100%'
+  }
+
+  function augmentLightbox(root, img) {
+    if (root.dataset.dshdcLightbox === '1') return
+    root.dataset.dshdcLightbox = '1'
+    lightboxState.root = root
+    resetLightbox(img)
+
+    const toolbar = document.createElement('div')
+    toolbar.style.cssText = 'position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:5;display:flex;gap:8px;align-items:center;padding:6px 12px;border-radius:16px;background:var(--dsw-alias-bg-layer-2,rgba(20,24,32,.85));border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.12));backdrop-filter:blur(8px);font-family:inherit;'
+    const meter = document.createElement('span')
+    meter.className = 'dshdc-zoom-meter'
+    meter.style.cssText = 'font-size:12px;color:var(--dsw-alias-label-secondary,#bbb);min-width:40px;text-align:center;'
+    meter.textContent = '100%'
+    const mkBtn = (label, title, onClick) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.textContent = label
+      b.title = title
+      b.style.cssText = 'border:1px solid var(--dsw-alias-border-l2,rgba(255,255,255,.14));background:transparent;color:var(--dsw-alias-label-primary,#eee);border-radius:12px;height:24px;padding:0 10px;font-size:12px;cursor:pointer;font-family:inherit;'
+      b.addEventListener('click', (event) => { event.stopPropagation(); onClick() })
+      return b
+    }
+    toolbar.append(
+      mkBtn('−', '缩小', () => { lightboxState.scale = Math.max(0.2, lightboxState.scale / 1.2); applyLightboxTransform(img); meter.textContent = `${Math.round(lightboxState.scale * 100)}%` }),
+      meter,
+      mkBtn('+', '放大', () => { lightboxState.scale = Math.min(8, lightboxState.scale * 1.2); applyLightboxTransform(img); meter.textContent = `${Math.round(lightboxState.scale * 100)}%` }),
+      mkBtn('重置', '恢复原尺寸（双击图片同效）', () => { resetLightbox(img) }),
+      mkBtn('下载', '下载原图', async () => {
+        try {
+          const response = await fetch(img.src)
+          const blob = await response.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = img.alt || 'image.png'
+          a.click()
+          setTimeout(() => URL.revokeObjectURL(url), 5000)
+        } catch { toast('下载失败：无法读取图片数据') }
+      }),
+    )
+    root.appendChild(toolbar)
+
+    root.addEventListener('wheel', (event) => {
+      event.preventDefault()
+      const delta = event.deltaY < 0 ? 1.12 : 1 / 1.12
+      lightboxState.scale = Math.min(8, Math.max(0.2, lightboxState.scale * delta))
+      applyLightboxTransform(img)
+      meter.textContent = `${Math.round(lightboxState.scale * 100)}%`
+    }, { passive: false })
+    img.addEventListener('dblclick', (event) => { event.stopPropagation(); resetLightbox(img) })
+
+    let dragging = false
+    let last = { x: 0, y: 0 }
+    img.addEventListener('mousedown', (event) => {
+      if (lightboxState.scale <= 1) return
+      dragging = true
+      last = { x: event.clientX, y: event.clientY }
+      img.style.cursor = 'grabbing'
+      event.preventDefault()
+      event.stopPropagation()
+    })
+    window.addEventListener('mousemove', (event) => {
+      if (!dragging) return
+      lightboxState.tx += event.clientX - last.x
+      lightboxState.ty += event.clientY - last.y
+      last = { x: event.clientX, y: event.clientY }
+      applyLightboxTransform(img)
+    })
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return
+      dragging = false
+      img.style.cursor = lightboxState.scale > 1 ? 'grab' : 'zoom-in'
+    })
+    // The official backdrop closes on mousedown; while zoomed, image drags
+    // must not reach it (handled above), and backdrop clicks still close.
+  }
+
+  /* ---------- observation loop ---------- */
+  let scanTimer = null
+  function scan() {
+    if (!document.adoptedStyleSheets.includes(stylesheet)) {
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, stylesheet]
+    }
+    const card = findComposer()
+    if (card) {
+      if (card !== composerState.card || !composerState.chip || !card.contains(composerState.chip)) augment(card)
+      const trigger = findModelTrigger(card)
+      if (trigger && trigger !== composerState.trigger) {
+        composerState.trigger = trigger
+        if (composerState.chip) trigger.parentElement.insertBefore(composerState.chip, trigger)
+      }
+      const label = modelLabelOf(composerState.trigger)
+      if (label !== composerState.label) {
+        composerState.label = label
+        refreshChip()
+      }
+      const hasImages = draftHasImages(card)
+      if (hasImages !== composerState.hasImages) {
+        composerState.hasImages = hasImages
+        refreshBanner()
+      }
+    }
+    const lightbox = findLightbox()
+    if (lightbox) augmentLightbox(lightbox.root, lightbox.img)
+    else lightboxState.root = null
+  }
+  const throttledScan = () => {
+    if (scanTimer) return
+    scanTimer = setTimeout(() => { scanTimer = null; scan() }, 250)
+  }
+  const observer = new MutationObserver(throttledScan)
+  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true })
+  scan()
+}
+
+module.exports = { init }

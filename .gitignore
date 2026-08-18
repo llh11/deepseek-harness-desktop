@@ -1,0 +1,11 @@
+node_modules/
+release/
+release-*/
+build/*.png
+dsh-service/
+node-runtime/
+mirror-site/downloads/
+*.log
+build-status.txt
+result-now.txt
+z7status.txt

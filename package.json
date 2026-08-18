@@ -1,0 +1,56 @@
+{
+  "name": "dsh-desktop",
+  "productName": "DeepSeek Harness Desktop",
+  "version": "1.3.0",
+  "description": "把官方 DeepSeek Harness 的本地 Web UI 带到原生桌面。应用自动启动和管理本地 Harness 服务，集成系统托盘与桌面窗口，无需安装 Node.js 或执行命令。",
+  "author": "DeepSeek Harness Desktop",
+  "license": "MIT",
+  "main": "main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "gen:icons": "electron scripts/gen-icons.js",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ai.deepseek.dsh.desktop",
+    "productName": "DeepSeek Harness Desktop",
+    "directories": {
+      "output": "release-1_3_0"
+    },
+    "files": [
+      "main/**",
+      "preload.js",
+      "renderer/**",
+      "assets/**",
+      "package.json",
+      "LICENSE*"
+    ],
+    "extraResources": [
+      {
+        "from": "dsh-service",
+        "to": "dsh-service"
+      },
+      {
+        "from": "node-runtime",
+        "to": "node-runtime"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "DeepSeek Harness"
+    }
+  },
+  "allowScripts": {}
+}

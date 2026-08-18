@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'" />
+  <title>DeepSeek Harness</title>
+  <link rel="stylesheet" href="loading.css" />
+</head>
+<body>
+  <main class="splash">
+    <img class="logo" src="../assets/dsh.svg" alt="DeepSeek Harness" />
+    <h1>DeepSeek Harness</h1>
+    <div class="spinner" id="spinner"></div>
+    <p class="status" id="status">正在准备本地服务…</p>
+    <p class="detail" id="detail"></p>
+    <div class="actions">
+      <button id="btn-retry" class="primary">重试启动</button>
+      <button id="btn-browser">在浏览器中打开</button>
+    </div>
+  </main>
+  <script src="loading.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+:root {
+  --accent: #4d6bfe;
+  --text: #1a2233;
+  --muted: #6b7280;
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --border: #e3e8f0;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --err: #dc2626;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+.splash {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 32px;
+}
+.logo { width: 88px; height: 88px; }
+h1 { font-size: 26px; font-weight: 600; }
+.status { font-size: 15px; color: var(--text); }
+.detail { font-size: 13px; color: var(--muted); max-width: 560px; white-space: pre-wrap; }
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.spinner.done { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.actions { display: flex; gap: 10px; margin-top: 8px; }
+button {
+  font: inherit;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { opacity: 0.9; color: #fff; }
