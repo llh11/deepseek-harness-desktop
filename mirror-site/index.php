@@ -31,7 +31,12 @@ if ($feed && empty($desktopHistory) && !empty($feed['version'])) {
 
 $screens = !empty($cfg['screens']) && is_array($cfg['screens'])
     ? $cfg['screens']
-    : ['assets/screens/app-main.png', 'assets/screens/app-settings.png'];
+    : ['media.php?f=screens/app-main.png', 'media.php?f=screens/app-settings.png', 'media.php?f=screens/app-plugins.png', 'media.php?f=screens/app-usage.png'];
+// The web server rewrites non-PHP paths to index.php, so any legacy
+// "assets/..." reference must go through media.php.
+$mediaUrl = fn(string $src): string => str_starts_with($src, 'assets/') ? 'media.php?f=' . substr($src, 7) : $src;
+$screens = array_map($mediaUrl, $screens);
+$cfg['qq_qr'] = $mediaUrl((string)$cfg['qq_qr']);
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -40,7 +45,7 @@ $screens = !empty($cfg['screens']) && is_array($cfg['screens'])
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DeepSeek Harness Desktop — 桌面客户端 · 镜像与下载中心</title>
 <meta name="description" content="DeepSeek Harness Desktop：把官方 DeepSeek Harness 带到原生桌面。免 Node.js、系统托盘、多模态对话、Skill 与 MCP 可视化管理、账户与用量一览。">
-<link rel="icon" type="image/svg+xml" href="assets/dsh.svg">
+<link rel="icon" type="image/svg+xml" href="media.php?f=dsh.svg">
 <style>
 :root {
   --bg: #ffffff;
@@ -178,7 +183,7 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
 
 <nav><div class="wrap">
   <a class="brand" href="./">
-    <img src="assets/dsh.svg" alt="DeepSeek Harness">
+    <img src="media.php?f=dsh.svg" alt="DeepSeek Harness">
     DeepSeek Harness Desktop <small>镜像与下载中心</small>
   </a>
   <div class="links">
@@ -245,10 +250,12 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
     <p>官方 Web UI 原样保留，桌面能力以官方设计语言无缝融入。</p>
   </div>
   <div class="shots">
-    <?php foreach ($screens as $i => $src): ?>
+    <?php
+      $captions = ['对话主界面 · 多模态状态徽标', '设置面板 · 桌面端分区', '官方插件列表 · 内置插件中文注解', '账户与用量 · 余额与任务消耗统计'];
+      foreach ($screens as $i => $src): ?>
     <figure>
       <img src="<?= h($src) ?>" alt="DeepSeek Harness Desktop 界面截图 <?= $i + 1 ?>" loading="lazy">
-      <figcaption><?= $i === 0 ? '对话主界面' : '设置面板' ?></figcaption>
+      <figcaption><?= h($captions[$i] ?? '界面截图') ?></figcaption>
     </figure>
     <?php endforeach; ?>
   </div>

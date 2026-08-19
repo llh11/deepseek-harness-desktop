@@ -339,8 +339,14 @@ function init(ipcRenderer) {
       pluginNotes = { at: Date.now(), map: new Map() }
       for (const item of data.items) {
         if (item.curated && item.summary) {
-          pluginNotes.map.set(item.name.toLowerCase(), item.summary)
-          pluginNotes.map.set(`@deepseek-ai/${item.name}`.toLowerCase(), item.summary)
+          const name = item.name.toLowerCase()
+          pluginNotes.map.set(name, item.summary)
+          pluginNotes.map.set(`@deepseek-ai/${name}`, item.summary)
+          // The official inventory strips well-known prefixes: dsh-agent → agent,
+          // cordis-plugin-timer → timer. Register the display forms too.
+          for (const prefix of ['dsh-', 'cordis-plugin-']) {
+            if (name.startsWith(prefix)) pluginNotes.map.set(name.slice(prefix.length), item.summary)
+          }
         }
       }
     }
@@ -353,7 +359,7 @@ function init(ipcRenderer) {
     if (pluginNotes.map.size === 0) return
     for (const dialog of document.querySelectorAll('[role="dialog"][aria-modal="true"]')) {
       if (!dialog.querySelector('nav')) continue
-      const nodes = dialog.querySelectorAll('span, div, p, a, code')
+      const nodes = dialog.querySelectorAll('span, div, p, a, code, strong, b, h1, h2, h3, h4, h5, li, button')
       for (const node of nodes) {
         if (node.dataset.dshdcNoted !== undefined) continue
         if (node.closest('.dshdx-section')) continue
@@ -702,8 +708,16 @@ function init(ipcRenderer) {
     scanTimer = setTimeout(() => { scanTimer = null; scan() }, 250)
   }
   const observer = new MutationObserver(throttledScan)
-  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true })
-  scan()
+  const startObserving = () => {
+    if (!document.documentElement) return false
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true })
+    scan()
+    return true
+  }
+  // Preloads run at document creation; documentElement may not exist yet.
+  if (!startObserving()) {
+    document.addEventListener('DOMContentLoaded', startObserving, { once: true })
+  }
 }
 
 module.exports = { init }

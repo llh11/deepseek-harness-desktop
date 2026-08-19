@@ -201,6 +201,16 @@ const CURATED = {
   'dsh-workspace': { category: '基础', text: '工作区管理：项目目录的登记与切换。' },
 }
 
+/** Curated explanations for Cordis framework plugins (displayed without the cordis-plugin- prefix). */
+const CURATED_CORDIS = {
+  'cordis': { category: '基础', text: 'Cordis 插件框架内核：插件生命周期、上下文与事件总线。' },
+  'cordis-plugin-group': { category: '基础', text: 'Cordis 插件分组：把相关插件编组统一启停。' },
+  'cordis-plugin-hmr': { category: '基础', text: 'Cordis 插件热更新：开发期改动插件无需重启即可生效。' },
+  'cordis-plugin-include': { category: '基础', text: 'Cordis 插件组合复用：把一组插件配置打包引用，避免重复装配。' },
+  'cordis-plugin-loader': { category: '基础', text: 'Cordis 插件加载器：按清单发现、解析并装载插件包。' },
+  'cordis-plugin-timer': { category: '基础', text: 'Cordis 定时器服务：为插件提供延时与周期任务能力。' },
+}
+
 /** Human-readable category order. */
 const CATEGORY_ORDER = ['入口', '基础', '界面', '模型', '智能体', '工具', '扩展', '命令', '任务', '会话', '上下文', '多模态', '其它']
 
@@ -247,7 +257,10 @@ function catalog() {
     let entries = []
     try { entries = fs.readdirSync(base, { withFileTypes: true }) } catch { continue }
     for (const entry of entries) {
-      if (!entry.isDirectory() || !entry.name.startsWith('dsh')) continue
+      if (!entry.isDirectory()) continue
+      const isDsh = entry.name.startsWith('dsh')
+      const isCordis = entry.name === 'cordis' || entry.name.startsWith('cordis-plugin-')
+      if (!isDsh && !isCordis) continue
       if (found.has(entry.name)) continue
       const dir = path.join(base, entry.name)
       let version = null
@@ -257,13 +270,15 @@ function catalog() {
         version = typeof manifest.version === 'string' ? manifest.version : null
         description = typeof manifest.description === 'string' ? manifest.description : ''
       } catch { /* partial install */ }
-      const curated = CURATED[entry.name]
+      const curated = isCordis ? CURATED_CORDIS[entry.name] : CURATED[entry.name]
+      const summary = curated?.text ?? description ?? firstParagraphOfReadme(dir)
+      if (summary === '') continue
       found.set(entry.name, {
         name: entry.name,
         package: `@deepseek-ai/${entry.name}`,
         version,
-        category: curated?.category ?? guessCategory(entry.name),
-        summary: curated?.text ?? description ?? firstParagraphOfReadme(dir),
+        category: curated?.category ?? (isCordis ? '基础' : guessCategory(entry.name)),
+        summary,
         curated: Boolean(curated),
       })
     }

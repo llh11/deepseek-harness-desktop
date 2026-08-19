@@ -138,7 +138,7 @@ $filesDir = ensure_files_dir();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>镜像与发布管理 — DeepSeek Harness Desktop</title>
-<link rel="icon" type="image/svg+xml" href="../assets/dsh.svg">
+<link rel="icon" type="image/svg+xml" href="../media.php?f=dsh.svg">
 <style>
 :root { --bg:#f7f8fa; --panel:#ffffff; --line:#e8eaee; --line2:#d8dbe2; --text:#0b0d12; --sub:#5b6270; --faint:#98a0ae; --accent:#4d6bfe; --accent-deep:#3b56e8; --err:#d64545; --ok:#12934f; }
 * { box-sizing:border-box; margin:0; padding:0; }
@@ -195,7 +195,7 @@ td form .btn { margin-top:0; padding:4px 14px; font-size:12px; }
 <body>
 <div class="wrap">
 <?php if (!$authed): ?>
-  <div class="brand" style="margin-bottom:26px"><img src="../assets/dsh.svg" alt=""><h1>镜像与发布管理</h1></div>
+  <div class="brand" style="margin-bottom:26px"><img src="../media.php?f=dsh.svg" alt=""><h1>镜像与发布管理</h1></div>
   <div class="card" style="max-width:400px">
     <?php if ($err): ?><p class="err"><?= h($err) ?></p><?php endif; ?>
     <form method="post">
@@ -207,7 +207,7 @@ td form .btn { margin-top:0; padding:4px 14px; font-size:12px; }
   </div>
 <?php else: ?>
   <div class="topbar">
-    <div class="brand"><img src="../assets/dsh.svg" alt=""><h1>镜像与发布管理</h1></div>
+    <div class="brand"><img src="../media.php?f=dsh.svg" alt=""><h1>镜像与发布管理</h1></div>
     <form method="post"><button class="btn secondary" type="submit" name="logout" value="1">退出登录</button></form>
   </div>
   <?php if ($msg): ?><p class="msg"><?= h($msg) ?></p><?php endif; ?>

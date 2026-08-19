@@ -514,8 +514,8 @@ function init(ipcRenderer) {
 
     const paintProviders = (providers) => {
       providersCache = providers
-      listHost.replaceChildren(providers.length === 0
-        ? el('p', { class: 'dshdx-caption', text: '尚未添加第三方 Provider。点击下方按钮接入其它模型（含多模态视觉模型）。' })
+      listHost.replaceChildren(...(providers.length === 0
+        ? [el('p', { class: 'dshdx-caption', text: '尚未添加第三方 Provider。点击下方按钮接入其它模型（含多模态视觉模型）。' })]
         : providers.map((provider) => el('div', { class: 'dshdx-card' },
             el('div', { class: 'dshdx-cardhead' },
               el('span', { class: 'dshdx-cardtitle', text: provider.displayName || provider.id }),
@@ -533,7 +533,7 @@ function init(ipcRenderer) {
             ),
             el('p', { class: 'dshdx-caption', text: provider.upstreamBaseURL }),
             el('div', { class: 'dshdx-rowline' }, provider.models.map((model) => tag(`${model.id}${model.input?.includes('image') ? ' · 视觉' : ''}`, model.input?.includes('image') ? 'dshdx-tag-ok' : ''))),
-          )))
+          ))))
     }
     call('providers:list').then(paintProviders).catch(() => {})
 
@@ -673,11 +673,10 @@ function init(ipcRenderer) {
     const ghResults = el('div', { class: 'dshdx-stack' })
     const ghSearch = async () => {
       ghResults.replaceChildren(el('p', { class: 'dshdx-caption', text: '正在搜索 GitHub…' }))
-      void 0
       try {
         const results = await call('skills:searchGitHub', { query: ghQuery.value })
-        ghResults.replaceChildren(results.length === 0
-          ? el('p', { class: 'dshdx-caption', text: '没有找到相关仓库。' })
+        ghResults.replaceChildren(...(results.length === 0
+          ? [el('p', { class: 'dshdx-caption', text: '没有找到相关仓库。' })]
           : results.map((item) => el('div', { class: 'dshdx-card' },
               el('div', { class: 'dshdx-cardhead' },
                 el('span', { class: 'dshdx-cardtitle', text: item.fullName }),
@@ -694,7 +693,7 @@ function init(ipcRenderer) {
                 ),
               ),
               item.description ? el('p', { class: 'dshdx-caption', text: item.description }) : null,
-            )))
+            ))))
       } catch { /* safely already toasted */ ghResults.replaceChildren() }
     }
 
@@ -730,8 +729,8 @@ function init(ipcRenderer) {
     const paintItems = () => {
       const keyword = searchInput.value.trim().toLowerCase()
       const items = skillsData.items.filter((item) => keyword === '' || item.name.toLowerCase().includes(keyword) || (item.description ?? '').toLowerCase().includes(keyword))
-      listHost.replaceChildren(items.length === 0
-        ? el('p', { class: 'dshdx-caption', text: '没有匹配的 Skill。' })
+      listHost.replaceChildren(...(items.length === 0
+        ? [el('p', { class: 'dshdx-caption', text: '没有匹配的 Skill。' })]
         : items.map((item) => el('div', { class: 'dshdx-card' },
             el('div', { class: 'dshdx-cardhead' },
               el('span', { class: 'dshdx-cardtitle', text: item.name }),
@@ -755,7 +754,7 @@ function init(ipcRenderer) {
             item.shadowedBy ? el('p', { class: 'dshdx-issue', text: `被 ${item.shadowedBy} 中的同名技能遮蔽，当前不生效。` }) : null,
             ...item.issues.map((issue) => el('p', { class: 'dshdx-issue', text: issue })),
             el('p', { class: 'dshdx-path', text: item.path }),
-          )))
+          ))))
     }
     const paintSkills = (data) => {
       skillsData = data
@@ -806,8 +805,8 @@ function init(ipcRenderer) {
 
     const paint = (data) => {
       mcpState = data
-      listHost.replaceChildren(data.servers.length === 0
-        ? el('p', { class: 'dshdx-caption', text: '尚未配置 MCP 服务器。添加后以官方 mcp-client 插件注入，模型可直接调用其工具（mcp__<名称>__<工具>）。' })
+      listHost.replaceChildren(...(data.servers.length === 0
+        ? [el('p', { class: 'dshdx-caption', text: '尚未配置 MCP 服务器。添加后以官方 mcp-client 插件注入，模型可直接调用其工具（mcp__<名称>__<工具>）。' })]
         : data.servers.map((server) => {
             const resultLine = el('p', { class: 'dshdx-caption' })
             const testButton = btn('测试连接', 'secondary', async () => {
@@ -844,7 +843,7 @@ function init(ipcRenderer) {
               el('p', { class: 'dshdx-caption', text: server.transport === 'stdio' ? server.command : server.url }),
               resultLine,
             )
-          }))
+          })))
     }
     call('mcp:state').then(paint).catch(() => {})
 
@@ -972,15 +971,15 @@ function init(ipcRenderer) {
       balanceHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '正在查询各 Provider 账户余额…' }))
       try {
         const rows = await call('providers:balances')
-        balanceHost.replaceChildren(rows.length === 0
-          ? el('p', { class: 'dshdx-caption', text: '尚未配置任何 Provider。请先在「模型与多模态」中添加并保存 API Key。' })
+        balanceHost.replaceChildren(...(rows.length === 0
+          ? [el('p', { class: 'dshdx-caption', text: '尚未配置任何 Provider。请先在「模型与多模态」中添加并保存 API Key。' })]
           : rows.map((row) => el('div', { class: 'dshdx-rowline' },
               el('span', { class: 'dshdx-cardtitle', text: row.displayName ?? row.id }),
               row.gateway ? tag('经网关') : null,
               row.balance != null
                 ? el('span', { class: 'dshdx-cardtitle', style: 'margin-left:auto', text: row.balance })
                 : el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: row.note ?? '该服务商不支持余额查询' }),
-            )))
+            ))))
       } catch {
         balanceHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '余额查询失败，请稍后重试。' }))
       }
@@ -989,7 +988,7 @@ function init(ipcRenderer) {
     async function refreshStats() {
       try {
         const stats = await call('usage:stats')
-        statsHost.replaceChildren(
+        statsHost.replaceChildren(...[
           el('div', { class: 'dshdx-rowline', style: 'align-items:stretch' },
             sumRow('今日', stats.today), sumRow('近 7 日', stats.week), sumRow('累计', stats.total)),
           stats.models.length > 0
@@ -1000,14 +999,14 @@ function init(ipcRenderer) {
                   el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `${m.requests} 次 · ${fmtTokens(m.prompt + m.completion)} tokens${m.cost != null ? ` · ≈ ¥${m.cost.toFixed(3)}` : ''}` }),
                 ))))
             : null,
-        )
-        recentHost.replaceChildren(stats.recent.length === 0
-          ? el('p', { class: 'dshdx-caption', text: '暂无用量记录。经本地翻译网关发出的请求会自动记录 token 用量。' })
+        ].filter(Boolean))
+        recentHost.replaceChildren(...(stats.recent.length === 0
+          ? [el('p', { class: 'dshdx-caption', text: '暂无用量记录。经本地翻译网关发出的请求会自动记录 token 用量。' })]
           : stats.recent.map((r) => el('div', { class: 'dshdx-rowline' },
               el('span', { class: 'dshdx-caption', text: new Date(r.ts).toLocaleString() }),
               el('span', { class: 'dshdx-sub', text: `${r.providerId} / ${r.model}` }),
               el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `输入 ${fmtTokens(r.promptTokens)} · 输出 ${fmtTokens(r.completionTokens)}${r.cost != null ? ` · ≈ ¥${r.cost.toFixed(4)}` : ''}` }),
-            )))
+            ))))
       } catch {
         statsHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '用量统计读取失败。' }))
       }
