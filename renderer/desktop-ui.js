@@ -22,13 +22,6 @@ const ICONS = {
       'M9.13764 7.99999C9.13764 7.3715 8.62855 6.8624 8.00005 6.8624C7.37155 6.8624 6.86246 7.3715 6.86246 7.99999C6.86246 8.62849 7.37155 9.13759 8.00005 9.13759C8.62855 9.13759 9.13764 8.62849 9.13764 7.99999ZM10.4834 7.99999C10.4834 9.37126 9.37132 10.4833 8.00005 10.4833C6.62878 10.4833 5.51674 9.37126 5.51674 7.99999C5.51674 6.62873 6.62878 5.51669 8.00005 5.51669C9.37132 5.51669 10.4834 6.62873 10.4834 7.99999Z',
     ],
   },
-  data: {
-    viewBox: '0 0 16 16',
-    paths: [
-      'M12.0997 8.54554C12.2905 8.54989 12.3541 8.58056 12.4535 8.74614L12.8849 9.46387C12.9851 9.63071 13.0464 9.66013 13.2388 9.66447H14.1138C14.3417 9.66448 14.3512 9.66937 14.4686 9.86507L14.892 10.5717C14.9942 10.7422 14.9948 10.8247 14.892 10.9961L14.4756 11.6906C14.3741 11.8677 14.3694 11.9379 14.4756 12.115L14.892 12.8096C14.9942 12.9801 14.9947 13.0625 14.892 13.234L14.4686 13.9406C14.3643 14.1028 14.3063 14.1354 14.1138 14.1412H13.2388C13.0465 14.1456 12.985 14.1752 12.8849 14.3418L12.4535 15.0595C12.353 15.2195 12.2895 15.2558 12.0997 15.2601H11.2237C10.9962 15.2601 10.9871 15.2548 10.8699 15.0595L10.4384 14.3418C10.3383 14.175 10.2767 14.1456 10.0846 14.1412H9.2096C9.01854 14.1355 8.95761 14.1006 8.85477 13.9406L8.43139 13.234C8.32562 13.0576 8.33148 12.9862 8.43139 12.8096L8.84771 12.115C8.95165 10.9416 8.94659 11.863 8.84771 11.6906L8.43139 10.9961C8.32767 10.8232 8.33411 10.7437 8.43139 10.5717L8.85477 9.86507C8.95447 9.69891 9.01875 9.67017 9.2096 9.66447H10.0846C10.2741 9.66441 10.3414 9.62547 10.4384 9.46387L10.8699 8.74614C10.987 8.55106 10.9963 8.54554 11.2237 8.54554H12.0997ZM11.6612 10.232C11.3326 10.7798 10.8155 11.0948 10.1743 11.106C10.4443 11.61 10.4425 12.1976 10.1743 12.6987C10.803 12.7096 11.3391 13.0359 11.6612 13.5727C11.9855 13.0323 12.5131 12.7098 13.148 12.6987C12.879 12.196 12.8789 11.6086 13.148 11.106C12.5076 11.0948 11.9894 10.7794 11.6612 10.232Z',
-      'M7.51205 0.790627C9.19055 0.790649 10.7401 1.0691 11.892 1.54364C12.4664 1.78029 12.9719 2.07885 13.3436 2.4408C13.7171 2.80467 13.9916 3.27253 13.9918 3.82384V7.90442C13.6067 7.69532 13.1907 7.53597 12.7529 7.43366V5.66454C12.4928 5.82898 12.2028 5.97601 11.892 6.10405C10.74 6.57865 9.19071 6.85706 7.51205 6.85706C5.8337 6.85703 4.285 6.57852 3.13309 6.10405C2.82215 5.97593 2.53164 5.8291 2.27121 5.66454V7.4135C2.27134 7.75678 2.6066 8.27106 3.62502 8.73405C4.58641 9.17097 5.95762 9.45591 7.50499 9.45681C7.24582 9.83133 7.03684 10.2434 6.88706 10.6826C5.44388 10.6162 4.12516 10.3216 3.11192 9.86104C2.81708 9.72698 2.53185 9.56866 2.27121 9.38928V11.2542C2.27158 11.5974 2.60697 12.1109 3.62502 12.5737C4.41933 12.9347 5.4937 13.1898 6.71569 13.2693C6.80349 13.7128 6.9513 14.1345 7.14814 14.5273C5.60324 14.4862 4.18593 14.1889 3.11192 13.7007C2.01039 13.1998 1.03366 12.3814 1.03333 11.2542V3.82384C1.03352 3.27273 1.30721 2.80461 1.68049 2.4408C2.05211 2.07893 2.55887 1.78026 3.13309 1.54364C4.28492 1.06926 5.83393 0.790683 7.51205 0.790627ZM7.51205 2.02851C5.95492 2.02857 4.57354 2.29079 3.60486 2.68979C3.11958 2.88977 2.76667 3.11253 2.5454 3.32788C2.32671 3.54101 2.2714 3.7089 2.27121 3.82384C2.27121 3.93882 2.32624 4.10625 2.5454 4.3198C2.76667 4.53527 3.11927 4.75781 3.60486 4.9579C4.5736 5.35699 5.95467 5.61914 7.51205 5.61918C9.06942 5.61918 10.4505 5.35695 11.4192 4.9579C11.9051 4.75773 12.2584 4.53536 12.4797 4.3198C12.6988 4.10627 12.7529 3.93882 12.7529 3.82384C12.7527 3.70889 12.6984 3.54104 12.4797 3.32788C12.2584 3.11239 11.9049 2.88989 11.4192 2.68979C10.4505 2.29079 9.06925 2.02853 7.51205 2.02851Z',
-    ],
-  },
   skill: {
     viewBox: '0 0 16 16',
     paths: [
@@ -89,6 +82,7 @@ function navIconSvg(icon, iconClass) {
 const CSS = `
 .dshdx-section { display: flex; flex-direction: column; gap: 12px; max-width: 720px; color: var(--dsw-alias-label-primary); }
 .dshdx-title { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dshdx-subtitle { margin: 4px 0 0; font-size: 14px; line-height: 22px; font-weight: 500; color: var(--dsw-alias-label-secondary); }
 .dshdx-intro { margin: 0; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-tertiary); }
 .dshdx-caption { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
 .dshdx-card { border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
@@ -128,10 +122,6 @@ const CSS = `
 .dshdx-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-bg-layer-2); transition: left .15s ease; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
 .dshdx-switch:checked { background: var(--dsw-alias-button-primary-fill); }
 .dshdx-switch:checked::after { left: 18px; }
-.dshdx-modelrow { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px; align-items: center; }
-.dshdx-modality { display: flex; gap: 4px; align-items: center; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
-.dshdx-modality label { display: flex; gap: 3px; align-items: center; cursor: pointer; }
-.dshdx-modality input { accent-color: var(--dsw-alias-button-primary-fill); }
 .dshdx-editor { border-radius: 12px; background: var(--dsw-alias-bg-module-platform); padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
 .dshdx-kvrow { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
 .dshdx-path { color: var(--dsw-alias-label-quaternary); font-size: 12px; line-height: 18px; word-break: break-all; }
@@ -146,10 +136,14 @@ const CSS = `
 .dshdx-hidden { display: none !important; }
 `
 
-/** Desktop sections appended after the official ones, in this order. */
+/** Desktop sections appended after the official ones, in this order. Since
+ * 1.4.0 the official engine covers multimodal and third-party provider
+ * configuration natively (official "模型" section speaks openai-completions
+ * AND anthropic-messages), so the former "模型与多模态" desktop section is
+ * gone — providers, keys, and image-input declarations all live on the
+ * official Models page now. */
 const SECTION_DEFS = [
   { id: 'desktop-service', label: '内置服务', icon: ICONS.settings },
-  { id: 'desktop-models', label: '模型与多模态', icon: ICONS.data },
   { id: 'desktop-usage', label: '账户与用量', icon: ICONS.usage },
   { id: 'desktop-skills', label: 'Skill 加载器', icon: ICONS.skill },
   { id: 'desktop-mcp', label: 'MCP 插件', icon: ICONS.plugins },
@@ -505,149 +499,6 @@ function init(ipcRenderer) {
     }).catch(() => {})
   }
 
-  let providersCache = []
-
-  function buildModelsSection() {
-    const root = el('div')
-    const listHost = el('div', { class: 'dshdx-stack' })
-    const editorHost = el('div')
-
-    const paintProviders = (providers) => {
-      providersCache = providers
-      listHost.replaceChildren(...(providers.length === 0
-        ? [el('p', { class: 'dshdx-caption', text: '尚未添加第三方 Provider。点击下方按钮接入其它模型（含多模态视觉模型）。' })]
-        : providers.map((provider) => el('div', { class: 'dshdx-card' },
-            el('div', { class: 'dshdx-cardhead' },
-              el('span', { class: 'dshdx-cardtitle', text: provider.displayName || provider.id }),
-              tag(provider.upstreamKind === 'anthropic' ? 'Anthropic 原生' : 'OpenAI 兼容'),
-              provider.viaGateway ? tag('经本地网关', 'dshdx-tag-ok') : null,
-              tag(`${provider.models.length} 个模型`),
-              provider.hasKey ? null : tag('未设置密钥', 'dshdx-tag-err'),
-              el('span', { class: 'dshdx-cardactions' },
-                btn('编辑', 'secondary', () => { editorHost.replaceChildren(buildProviderEditor(provider, paintProviders, editorHost)) }, true),
-                btn('删除', 'danger', async () => {
-                  if (!window.confirm(`确定删除 Provider "${provider.id}"？`)) return
-                  paintProviders(await safely('providers:remove', provider.id))
-                }, true),
-              ),
-            ),
-            el('p', { class: 'dshdx-caption', text: provider.upstreamBaseURL }),
-            el('div', { class: 'dshdx-rowline' }, provider.models.map((model) => tag(`${model.id}${model.input?.includes('image') ? ' · 视觉' : ''}`, model.input?.includes('image') ? 'dshdx-tag-ok' : ''))),
-          ))))
-    }
-    call('providers:list').then(paintProviders).catch(() => {})
-
-    root.replaceChildren(
-      el('h3', { class: 'dshdx-title', text: '模型与多模态' }),
-      el('p', { class: 'dshdx-intro', text: '官方对手动添加的第三方模型默认按仅文本处理，图片输入会被拒发。在此为模型声明视觉输入（写入官方 settings.yaml 的 input 声明），或经本地翻译网关接入 Anthropic 原生等非 OpenAI 兼容端点。' }),
-      listHost,
-      editorHost,
-      el('div', { class: 'dshdx-cardactions' }, btn('新增 Provider', 'primary', () => { editorHost.replaceChildren(buildProviderEditor(null, paintProviders, editorHost)) })),
-    )
-    return root
-  }
-
-  function modelRowControl(model) {
-    const idInput = input({ type: 'text', value: model.id ?? '', placeholder: '模型 ID，例如 gpt-4o / claude-sonnet-4-5 / glm-4v' })
-    idInput.className = 'dshdx-input'
-    const imageBox = el('input', { type: 'checkbox' })
-    imageBox.checked = model.input?.includes('image') ?? false
-    const row = el('div', { class: 'dshdx-modelrow' },
-      idInput,
-      el('span', { class: 'dshdx-modality' }, el('label', {}, el('input', { type: 'checkbox', checked: true, disabled: true }), 'text')),
-      el('span', { class: 'dshdx-modality' }, el('label', {}, imageBox, 'image')),
-      btn('智能识别', 'secondary', async () => {
-        const id = idInput.value.trim()
-        if (id === '') { toast('请先填写模型 ID', true); return }
-        const modality = await safely('providers:suggestInput', id).catch(() => null)
-        if (modality) {
-          imageBox.checked = modality.includes('image')
-          toast(modality.includes('image') ? `已为 ${id} 勾选视觉输入` : `${id} 识别为纯文本模型`)
-        }
-      }, true),
-      btn('移除', 'danger', () => row.remove(), true),
-    )
-    return { row, idInput, imageBox }
-  }
-
-  function buildProviderEditor(provider, repaint, editorHost) {
-    const isNew = provider === null
-    const rowsHost = el('div', { class: 'dshdx-stack' })
-    for (const model of (provider?.models?.length ? provider.models : [{ id: '' }])) {
-      rowsHost.appendChild(modelRowControl(model).row)
-    }
-
-    const idInput = input({ type: 'text', value: provider?.id ?? '', placeholder: 'my-gateway' })
-    if (!isNew) idInput.disabled = true
-    const nameInput = input({ type: 'text', value: provider?.displayName ?? '', placeholder: '我的模型网关' })
-    const kindSelect = el('select', { class: 'dshdx-select' },
-      el('option', { value: 'openai', text: 'OpenAI 兼容（chat/completions）' }),
-      el('option', { value: 'anthropic', text: 'Anthropic 原生（/v1/messages，自动经网关翻译）' }),
-    )
-    kindSelect.value = provider?.upstreamKind ?? 'openai'
-    const urlInput = input({ type: 'text', value: provider?.upstreamBaseURL ?? '', placeholder: 'https://api.example.com/v1' })
-    const keyInput = input({ type: 'password', placeholder: provider?.hasKey ? '已保存（留空保持不变）' : 'sk-…' })
-    const gatewayBox = el('input', { type: 'checkbox', class: 'dshdx-switch' })
-    gatewayBox.checked = provider?.viaGateway ?? false
-    const defaultImageBox = el('input', { type: 'checkbox' })
-    defaultImageBox.checked = provider?.defaultInput?.includes('image') ?? false
-    const syncGatewayLock = () => {
-      const isAnthropic = kindSelect.value === 'anthropic'
-      gatewayBox.checked = isAnthropic ? true : gatewayBox.checked
-      gatewayBox.disabled = isAnthropic
-    }
-    kindSelect.addEventListener('change', syncGatewayLock)
-    syncGatewayLock()
-
-    const editor = el('div', { class: 'dshdx-editor' },
-      el('div', { class: 'dshdx-cardhead' }, el('span', { class: 'dshdx-cardtitle', text: isNew ? '新增 Provider' : `编辑：${provider.id}` })),
-      field('Provider ID（小写字母/数字/连字符，创建后不可改）', idInput),
-      field('显示名称', nameInput),
-      field('接口类型', kindSelect),
-      field('上游 Base URL', urlInput),
-      field(`API Key${isNew ? '' : '（留空保持已保存的密钥不变）'}`, keyInput),
-      el('label', { class: 'dshdx-switchrow' }, gatewayBox, el('span', { text: '经本地翻译网关接入（Anthropic 原生必须启用）' })),
-      field('默认输入模态（未单独声明的模型使用）', el('span', { class: 'dshdx-modality' }, el('label', {}, el('input', { type: 'checkbox', checked: true, disabled: true }), 'text'), el('label', {}, defaultImageBox, 'image'))),
-      field('模型列表（勾选 image 即为该模型声明视觉输入）', el('div', { class: 'dshdx-stack' }, rowsHost,
-        el('div', { class: 'dshdx-inputrow' },
-          btn('添加模型', 'secondary', () => { const control = modelRowControl({ id: '' }); rowsHost.appendChild(control.row) }, true),
-          btn('从端点拉取模型列表', 'secondary', async () => {
-            if (urlInput.value.trim() === '') { toast('请先填写上游 Base URL', true); return }
-            const ids = await safely('providers:fetchModels', { baseURL: urlInput.value.trim(), apiKey: keyInput.value.trim(), upstreamKind: kindSelect.value, ...(isNew ? {} : { providerId: provider.id }) }).catch(() => [])
-            if (!ids || ids.length === 0) { toast('端点未返回任何模型', true); return }
-            const existing = new Set([...rowsHost.querySelectorAll('.dshdx-input')].map((node) => node.value.trim()))
-            for (const id of ids.filter((item) => !existing.has(item))) {
-              const modality = await call('providers:suggestInput', id).catch(() => ['text'])
-              const control = modelRowControl({ id, input: modality })
-              rowsHost.appendChild(control.row)
-            }
-            toast(`拉取到 ${ids.length} 个模型，视觉模型已自动勾选 image`)
-          }, true),
-        ),
-      )),
-      el('div', { class: 'dshdx-cardactions' },
-        btn('保存', 'primary', async () => {
-          const models = [...rowsHost.children].map((row) => {
-            const id = row.querySelector('.dshdx-input').value.trim()
-            const image = row.querySelectorAll('.dshdx-modality input[type="checkbox"]')[1].checked
-            return { id, input: image ? ['text', 'image'] : ['text'] }
-          }).filter((model) => model.id !== '')
-          await safely('providers:save', {
-            id: idInput.value.trim(), displayName: nameInput.value.trim(), upstreamKind: kindSelect.value,
-            upstreamBaseURL: urlInput.value.trim(), apiKey: keyInput.value.trim(),
-            viaGateway: kindSelect.value === 'anthropic' ? true : gatewayBox.checked,
-            defaultInput: defaultImageBox.checked ? ['text', 'image'] : ['text'], models,
-          })
-          editorHost.replaceChildren()
-          repaint(await call('providers:list').catch(() => providersCache))
-          toast('已保存：settings.yaml 与密钥已同步')
-        }),
-        btn('取消', 'secondary', () => editorHost.replaceChildren()),
-      ),
-    )
-    return editor
-  }
-
   function buildSkillsSection() {
     const root = el('div')
     const listHost = el('div', { class: 'dshdx-stack' })
@@ -666,7 +517,7 @@ function init(ipcRenderer) {
     kindSelect.addEventListener('change', () => pickButton.classList.toggle('dshdx-hidden', kindSelect.value !== 'folder'))
     const searchInput = input({ type: 'search', placeholder: '搜索名称 / 描述…' })
     searchInput.className = 'dshdx-input dshdx-search'
-    let skillsData = { roots: [], items: [] }
+    let skillsData = { roots: [], items: [], official: { available: false, error: null } }
 
     /* ---- GitHub skill search (v1.3) ---- */
     const ghQuery = input({ type: 'search', placeholder: '例如：pdf、commit、frontend…' })
@@ -686,7 +537,7 @@ function init(ipcRenderer) {
                   btn('安装', 'primary', async () => {
                     try {
                       const result = await safely('skills:install', { kind: 'git', ref: item.cloneUrl, rootId: rootSelect.value })
-                      paintSkills(await call('skills:list').catch(() => skillsData))
+                      paintSkills(await call('skills:listMerged').catch(() => skillsData))
                       toast(`安装成功：${result.installed.join('、')}`)
                     } catch { /* safely already toasted */ }
                   }, true),
@@ -710,7 +561,7 @@ function init(ipcRenderer) {
       if (paths.length === 0) return
       try {
         const result = await safely('skills:installPaths', { paths, rootId: rootSelect.value })
-        paintSkills(await call('skills:list').catch(() => skillsData))
+        paintSkills(await call('skills:listMerged').catch(() => skillsData))
         if (result.installed.length > 0) toast(`安装成功：${result.installed.join('、')}`)
         if (result.errors?.length > 0) toast(result.errors[0], true)
       } catch { /* safely already toasted */ }
@@ -731,45 +582,71 @@ function init(ipcRenderer) {
       const items = skillsData.items.filter((item) => keyword === '' || item.name.toLowerCase().includes(keyword) || (item.description ?? '').toLowerCase().includes(keyword))
       listHost.replaceChildren(...(items.length === 0
         ? [el('p', { class: 'dshdx-caption', text: '没有匹配的 Skill。' })]
-        : items.map((item) => el('div', { class: 'dshdx-card' },
-            el('div', { class: 'dshdx-cardhead' },
-              el('span', { class: 'dshdx-cardtitle', text: item.name }),
-              tag(`${item.rootLabel} · rank ${item.rank}`),
-              tag(item.isBundle ? '目录包' : '单文件'),
-              item.modelInvocable ? tag('模型可调用', 'dshdx-tag-ok') : tag('已停用', 'dshdx-tag-warn'),
-              el('span', { class: 'dshdx-cardactions' },
-                btn('打开位置', 'secondary', () => {
-                  const target = item.path
-                  const dir = target.endsWith('SKILL.md') ? target.slice(0, -'SKILL.md'.length) : target.replace(/[^/\\]+$/, '')
-                  call('shell:openPath', dir)
-                }, true),
-                btn('删除', 'danger', async () => {
-                  if (!window.confirm(`确定删除技能 "${item.name}"？`)) return
-                  skillsData = await safely('skills:remove', item.path)
-                  paintItems()
-                }, true),
-              ),
-            ),
-            item.description ? el('p', { class: 'dshdx-caption', text: item.description }) : null,
-            item.shadowedBy ? el('p', { class: 'dshdx-issue', text: `被 ${item.shadowedBy} 中的同名技能遮蔽，当前不生效。` }) : null,
-            ...item.issues.map((issue) => el('p', { class: 'dshdx-issue', text: issue })),
-            el('p', { class: 'dshdx-path', text: item.path }),
-          ))))
+        : items.map((item) => item.readOnly
+            ? el('div', { class: 'dshdx-card' },
+                el('div', { class: 'dshdx-cardhead' },
+                  el('span', { class: 'dshdx-cardtitle', text: item.name }),
+                  tag(`${item.rootLabel} · rank ${item.rank}`),
+                  tag('官方内置 · 只读', 'dshdx-tag-warn'),
+                  item.modelInvocable ? tag('模型可调用', 'dshdx-tag-ok') : tag('仅用户调用', 'dshdx-tag-warn'),
+                ),
+                item.description ? el('p', { class: 'dshdx-caption', text: item.description }) : null,
+                el('p', { class: 'dshdx-caption', text: '由引擎或插件捆绑提供，已在会话 / 菜单中生效。如需定制，在任一本地根目录创建同名 Skill 即可覆盖（本地 rank 更高）。' }),
+              )
+            : el('div', { class: 'dshdx-card' },
+                el('div', { class: 'dshdx-cardhead' },
+                  el('span', { class: 'dshdx-cardtitle', text: item.name }),
+                  tag(`${item.rootLabel} · rank ${item.rank}`),
+                  tag(item.isBundle ? '目录包' : '单文件'),
+                  item.modelInvocable ? tag('模型可调用', 'dshdx-tag-ok') : tag('已停用', 'dshdx-tag-warn'),
+                  el('span', { class: 'dshdx-cardactions' },
+                    btn('打开位置', 'secondary', () => {
+                      const target = item.path
+                      const dir = target.endsWith('SKILL.md') ? target.slice(0, -'SKILL.md'.length) : target.replace(/[^/\\]+$/, '')
+                      call('shell:openPath', dir)
+                    }, true),
+                    btn('删除', 'danger', async () => {
+                      if (!window.confirm(`确定删除技能 "${item.name}"？`)) return
+                      await safely('skills:remove', item.path)
+                      paintSkills(await call('skills:listMerged').catch(() => skillsData))
+                    }, true),
+                  ),
+                ),
+                item.description ? el('p', { class: 'dshdx-caption', text: item.description }) : null,
+                item.shadowedBy ? el('p', { class: 'dshdx-issue', text: `被 ${item.shadowedBy} 中的同名技能遮蔽，当前不生效。` }) : null,
+                ...item.issues.map((issue) => el('p', { class: 'dshdx-issue', text: issue })),
+                (skillsData.official?.available && !item.shadowedBy && item.inOfficialCatalog === false && item.issues.length === 0)
+                  ? el('p', { class: 'dshdx-caption', text: '尚未出现在官方目录中；若刚修改过，重启服务后生效。' })
+                  : null,
+                el('p', { class: 'dshdx-path', text: item.path }),
+              ))))
     }
+    const officialStatusHost = el('p', { class: 'dshdx-caption', style: 'display:none' })
     const paintSkills = (data) => {
       skillsData = data
       rootSelect.replaceChildren(...data.roots.map((skillRoot) => el('option', { value: skillRoot.id, text: `${skillRoot.label}${skillRoot.exists ? '' : '（不存在，安装时创建）'}` })))
+      if (data.official?.available === false && data.official?.error) {
+        officialStatusHost.textContent = `官方目录未连接（${data.official.error}）；当前仅展示本地扫描结果。`
+        officialStatusHost.style.display = ''
+      } else if (data.official?.available === true) {
+        const bundledCount = data.items.filter((item) => item.readOnly).length
+        officialStatusHost.textContent = `官方目录已连接，与会话 / 菜单一致（含 ${bundledCount} 个引擎/插件内置 Skill）。`
+        officialStatusHost.style.display = ''
+      } else {
+        officialStatusHost.style.display = 'none'
+      }
       paintItems()
     }
-    call('skills:list').then(paintSkills).catch(() => {})
+    call('skills:listMerged').then(paintSkills).catch(() => call('skills:list').then(paintSkills).catch(() => {}))
     if (skillsChangedListener) skillsChangedListener()
-    const onSkillsChanged = () => { if (listHost.isConnected) call('skills:list').then(paintSkills).catch(() => {}) }
+    const onSkillsChanged = () => { if (listHost.isConnected) call('skills:listMerged').then(paintSkills).catch(() => {}) }
     ipcRenderer.on('skills:changed', onSkillsChanged)
     skillsChangedListener = () => ipcRenderer.removeListener('skills:changed', onSkillsChanged)
 
     root.replaceChildren(
       el('h3', { class: 'dshdx-title', text: 'Skill 加载器' }),
-      el('p', { class: 'dshdx-intro', text: '按官方发现顺序扫描（项目 .dsh/.agents → 用户 ~/.dsh/.agents），自动校验命名规则、描述长度与跨目录重名遮蔽。支持从 GitHub 搜索安装、Git 仓库、本地文件夹、.md 链接，以及直接把 Skill 文件/压缩包拖入下方区域安装。' }),
+      el('p', { class: 'dshdx-intro', text: '与官方插件系统共用同一套目录与优先级（项目 .dsh/.agents → 用户 ~/.dsh/.agents → 官方内置 rank 600），不会冲突：本地扫描结果会与运行中的官方目录比对，引擎/插件捆绑的 Skill 以只读形式一并展示，与会话 / 菜单保持一致。' }),
+      officialStatusHost,
       el('div', { class: 'dshdx-card' },
         el('span', { class: 'dshdx-cardtitle', text: '安装 Skill' }),
         field('来源', kindSelect),
@@ -778,7 +655,7 @@ function init(ipcRenderer) {
         el('div', { class: 'dshdx-cardactions' }, btn('安装', 'primary', async () => {
           if (refInput.value.trim() === '') { toast('请填写来源地址', true); return }
           const result = await safely('skills:install', { kind: kindSelect.value, ref: refInput.value.trim(), rootId: rootSelect.value })
-          paintSkills(await call('skills:list').catch(() => skillsData))
+          paintSkills(await call('skills:listMerged').catch(() => skillsData))
           toast(`安装成功：${result.installed.join('、')}`)
         })),
       ),
@@ -849,7 +726,7 @@ function init(ipcRenderer) {
 
     root.replaceChildren(
       el('h3', { class: 'dshdx-title', text: 'MCP 插件' }),
-      el('p', { class: 'dshdx-intro', text: '通过官方 @deepseek-ai/dsh-mcp-client 插件接入外部 MCP 服务器；配置写入注入层并以 --patch 参数启动服务，不改动任何官方 profile 文件。保存后需重启服务生效。' }),
+      el('p', { class: 'dshdx-intro', text: '官方目前没有 MCP 可视化配置界面，本面板是其补充：通过官方 @deepseek-ai/dsh-mcp-client 插件接入外部 MCP 服务器，配置写入注入层并以 --patch 参数启动服务，不改动任何官方 profile 文件，与官方插件清单一栏互不影响。保存后需重启服务生效。' }),
       listHost,
       editorHost,
       el('div', { class: 'dshdx-cardactions' },
@@ -954,28 +831,28 @@ function init(ipcRenderer) {
   function buildUsageSection() {
     const root = el('div')
     const balanceHost = el('div', { class: 'dshdx-stack' })
-    const statsHost = el('div', { class: 'dshdx-stack' })
-    const recentHost = el('div', { class: 'dshdx-stack' })
+    const officialHost = el('div', { class: 'dshdx-stack' })
 
     const fmtTokens = (n) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)} M` : n >= 1000 ? `${(n / 1000).toFixed(1)} K` : String(n)
-    const sumRow = (label, data) => el('div', { class: 'dshdx-card', style: 'flex:1' },
+    const officialSumRow = (label, data) => el('div', { class: 'dshdx-card', style: 'flex:1' },
       el('span', { class: 'dshdx-caption', text: label }),
       el('div', { class: 'dshdx-rowline', style: 'justify-content:space-between' },
-        el('span', { class: 'dshdx-cardtitle', text: `${fmtTokens(data.prompt + data.completion)} tokens` }),
-        data.cost != null ? tag(`≈ ¥${data.cost.toFixed(3)}`) : null,
+        el('span', { class: 'dshdx-cardtitle', text: `${fmtTokens(data.input + data.output)} tokens` }),
       ),
-      el('span', { class: 'dshdx-caption', text: `${data.requests} 次请求 · 输入 ${fmtTokens(data.prompt)} · 输出 ${fmtTokens(data.completion)}` }),
+      el('span', { class: 'dshdx-caption', text: `${data.requests} 次请求 · 输入 ${fmtTokens(data.input)} · 输出 ${fmtTokens(data.output)}` }),
+      (data.cacheRead > 0 || data.reasoning > 0)
+        ? el('span', { class: 'dshdx-caption', text: `缓存命中 ${fmtTokens(data.cacheRead)} · 推理 ${fmtTokens(data.reasoning)}` })
+        : null,
     )
 
     async function refreshBalances() {
-      balanceHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '正在查询各 Provider 账户余额…' }))
+      balanceHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '正在查询各账户余额…' }))
       try {
-        const rows = await call('providers:balances')
+        const rows = await call('balances:list')
         balanceHost.replaceChildren(...(rows.length === 0
-          ? [el('p', { class: 'dshdx-caption', text: '尚未配置任何 Provider。请先在「模型与多模态」中添加并保存 API Key。' })]
+          ? [el('p', { class: 'dshdx-caption', text: '尚未配置任何账户。请在官方「模型」板块填写 API Key。' })]
           : rows.map((row) => el('div', { class: 'dshdx-rowline' },
               el('span', { class: 'dshdx-cardtitle', text: row.displayName ?? row.id }),
-              row.gateway ? tag('经网关') : null,
               row.balance != null
                 ? el('span', { class: 'dshdx-cardtitle', style: 'margin-left:auto', text: row.balance })
                 : el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: row.note ?? '该服务商不支持余额查询' }),
@@ -985,61 +862,83 @@ function init(ipcRenderer) {
       }
     }
 
-    async function refreshStats() {
+    async function refreshOfficial() {
+      officialHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '正在扫描官方会话日志…（首次扫描可能需要几秒）' }))
       try {
-        const stats = await call('usage:stats')
-        statsHost.replaceChildren(...[
+        const stats = await call('official-usage:stats')
+        const blocks = [
           el('div', { class: 'dshdx-rowline', style: 'align-items:stretch' },
-            sumRow('今日', stats.today), sumRow('近 7 日', stats.week), sumRow('累计', stats.total)),
-          stats.models.length > 0
-            ? el('div', { class: 'dshdx-card' },
-                el('span', { class: 'dshdx-cardtitle', text: '按模型统计' }),
-                el('div', { class: 'dshdx-stack' }, stats.models.map((m) => el('div', { class: 'dshdx-rowline' },
-                  el('span', { class: 'dshdx-sub', text: m.model }),
-                  el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `${m.requests} 次 · ${fmtTokens(m.prompt + m.completion)} tokens${m.cost != null ? ` · ≈ ¥${m.cost.toFixed(3)}` : ''}` }),
-                ))))
-            : null,
-        ].filter(Boolean))
-        recentHost.replaceChildren(...(stats.recent.length === 0
-          ? [el('p', { class: 'dshdx-caption', text: '暂无用量记录。经本地翻译网关发出的请求会自动记录 token 用量。' })]
-          : stats.recent.map((r) => el('div', { class: 'dshdx-rowline' },
-              el('span', { class: 'dshdx-caption', text: new Date(r.ts).toLocaleString() }),
-              el('span', { class: 'dshdx-sub', text: `${r.providerId} / ${r.model}` }),
-              el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `输入 ${fmtTokens(r.promptTokens)} · 输出 ${fmtTokens(r.completionTokens)}${r.cost != null ? ` · ≈ ¥${r.cost.toFixed(4)}` : ''}` }),
-            ))))
-      } catch {
-        statsHost.replaceChildren(el('p', { class: 'dshdx-caption', text: '用量统计读取失败。' }))
+            officialSumRow('今日', stats.today), officialSumRow('近 7 日', stats.week), officialSumRow('累计', stats.total)),
+        ]
+        if (stats.catalog && stats.catalog.groups.length > 0) {
+          blocks.push(el('div', { class: 'dshdx-card' },
+            el('span', { class: 'dshdx-cardtitle', text: '官方模型目录用量' }),
+            el('div', { class: 'dshdx-stack' }, stats.catalog.groups.map((group) => el('div', { class: 'dshdx-stack' },
+              el('div', { class: 'dshdx-rowline' },
+                el('span', { class: 'dshdx-sub', text: group.providerName }),
+                tag(`${group.models.length} 个模型`),
+              ),
+              el('div', { class: 'dshdx-stack', style: 'padding-left:10px' }, group.models.map((model) => el('div', { class: 'dshdx-rowline' },
+                el('span', { class: 'dshdx-caption', text: model.name === model.id ? model.id : `${model.name}（${model.id}）` }),
+                el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: model.usage.requests === 0
+                  ? '未使用'
+                  : `${model.usage.requests} 次 · 输入 ${fmtTokens(model.usage.input)} · 输出 ${fmtTokens(model.usage.output)}` }),
+              ))),
+            ))),
+            stats.catalog.failures.length > 0
+              ? el('p', { class: 'dshdx-caption', text: `部分服务商目录加载失败：${stats.catalog.failures.join('；')}` })
+              : null,
+          ))
+        }
+        const offCatalog = stats.models.filter((m) => !stats.catalog || !m.inCatalog)
+        if (stats.models.length > 0 && (stats.catalog === null || offCatalog.length > 0)) {
+          const listed = stats.catalog === null ? stats.models : offCatalog
+          blocks.push(el('div', { class: 'dshdx-card' },
+            el('span', { class: 'dshdx-cardtitle', text: stats.catalog === null ? '按模型统计' : '其他模型（不在当前官方目录中）' }),
+            el('div', { class: 'dshdx-stack' }, listed.map((m) => el('div', { class: 'dshdx-rowline' },
+              el('span', { class: 'dshdx-sub', text: m.model }),
+              el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `${m.requests} 次 · 输入 ${fmtTokens(m.input)} · 输出 ${fmtTokens(m.output)}` }),
+            ))),
+          ))
+        }
+        blocks.push(el('div', { class: 'dshdx-card' },
+          el('span', { class: 'dshdx-cardtitle', text: '最近请求' }),
+          stats.recent.length === 0
+            ? el('p', { class: 'dshdx-caption', text: '暂无记录。官方引擎处理请求后会话日志会写入 $DSH_HOME/sessions。' })
+            : el('div', { class: 'dshdx-stack' }, stats.recent.slice(0, 10).map((r) => el('div', { class: 'dshdx-rowline' },
+                el('span', { class: 'dshdx-caption', text: new Date(r.ts).toLocaleString() }),
+                el('span', { class: 'dshdx-sub', text: r.provider ? `${r.provider} / ${r.model ?? ''}` : (r.model ?? '') }),
+                el('span', { class: 'dshdx-caption', style: 'margin-left:auto', text: `输入 ${fmtTokens(r.inputTokens)} · 输出 ${fmtTokens(r.outputTokens)}` }),
+              ))),
+        ))
+        officialHost.replaceChildren(...blocks)
+      } catch (error) {
+        officialHost.replaceChildren(el('p', { class: 'dshdx-caption', text: `官方用量读取失败：${error.message ?? error}` }))
       }
     }
 
     root.replaceChildren(
       el('h3', { class: 'dshdx-title', text: '账户与用量' }),
-      el('p', { class: 'dshdx-intro', text: '查看当前 API Key 对应账户的余额，并统计每次任务的 token 消耗与估算费用。余额支持 DeepSeek 官方账户；用量由本地翻译网关在转发请求时自动记录。' }),
+      el('p', { class: 'dshdx-intro', text: '直接读取官方引擎会话日志统计用量，覆盖官方「模型」板块中的全部可选模型（含第三方 Provider 路由）；余额按官方凭据层解析出的 API Key 查询 DeepSeek 账户。' }),
       el('div', { class: 'dshdx-card' },
         el('div', { class: 'dshdx-cardhead' },
           el('span', { class: 'dshdx-cardtitle', text: '账户余额' }),
           el('div', { class: 'dshdx-cardactions' }, btn('刷新余额', 'secondary', refreshBalances, true)),
         ),
         balanceHost,
+        el('p', { class: 'dshdx-caption', text: '密钥统一在官方「模型」板块维护（写入 $DSH_HOME/.credentials.yaml），本面板只读查询。' }),
       ),
       el('div', { class: 'dshdx-card' },
         el('div', { class: 'dshdx-cardhead' },
-          el('span', { class: 'dshdx-cardtitle', text: '用量统计' }),
-          el('div', { class: 'dshdx-cardactions' },
-            btn('刷新', 'secondary', refreshStats, true),
-            btn('清空记录', 'danger', async () => { await safely('usage:clear'); refreshStats() }, true),
-          ),
+          el('span', { class: 'dshdx-cardtitle', text: '官方引擎用量' }),
+          el('div', { class: 'dshdx-cardactions' }, btn('刷新', 'secondary', refreshOfficial, true)),
         ),
-        statsHost,
-        el('p', { class: 'dshdx-caption', text: '提示：仅统计经本地翻译网关转发的请求。在「模型与多模态」中为 Provider 勾选「经本地翻译网关接入」即可纳入统计。' }),
-      ),
-      el('div', { class: 'dshdx-card' },
-        el('span', { class: 'dshdx-cardtitle', text: '最近任务消耗' }),
-        recentHost,
+        officialHost,
+        el('p', { class: 'dshdx-caption', text: '数据来源：官方引擎会话日志（$DSH_HOME/sessions），覆盖官方「模型」板块中的所有可选模型，含 token 输入/输出、缓存命中与推理 token。' }),
       ),
     )
     refreshBalances()
-    refreshStats()
+    refreshOfficial()
     return root
   }
 
@@ -1194,7 +1093,6 @@ function init(ipcRenderer) {
 
   const SECTION_BUILDERS = {
     'desktop-service': buildServiceSection,
-    'desktop-models': buildModelsSection,
     'desktop-usage': buildUsageSection,
     'desktop-skills': buildSkillsSection,
     'desktop-mcp': buildMcpSection,

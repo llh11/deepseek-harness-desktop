@@ -1,11 +1,16 @@
 'use strict'
 /**
  * Smart Skill loader backend. Scans the same roots and ranks as
- * dsh-skill-filesystem (project .dsh/.agents → user ~/.dsh/.agents), parses
- * SKILL.md frontmatter, validates identity/naming rules, flags shadowed
- * duplicates across ranks, and installs skills from a git repo, a local
- * folder, or a single .md URL — normalizing multi-skill repositories into
- * discoverable direct-child bundles.
+ * dsh-skill-filesystem (project .dsh/skills → .agents/skills → user
+ * ~/.dsh/skills → ~/.agents/skills), parses SKILL.md frontmatter, validates
+ * identity/naming rules, flags shadowed duplicates across ranks, and installs
+ * skills from a git repo, a local folder, or a single .md URL — normalizing
+ * multi-skill repositories into discoverable direct-child bundles.
+ *
+ * When the managed service is running, `listMerged` also queries the official
+ * skill registry (skill.list RPC) so plugin/preset-bundled skills (official
+ * BUNDLED rank, outside the filesystem roots) show up as read-only entries —
+ * keeping this panel consistent with the conversation page's `/` menu.
  */
 const { EventEmitter } = require('node:events')
 const { spawnSync } = require('node:child_process')
@@ -13,6 +18,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { skillRoots } = require('./paths')
 const settings = require('./settings-store')
+const { callRpc } = require('./service-rpc')
+
+/** Official precedence rank for packaged/bundled skills (dsh-skill BUNDLED_SKILL_RANK). */
+const BUNDLED_RANK = 600
 
 const events = new EventEmitter()
 const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -102,6 +111,59 @@ function list() {
   }
   items.sort((a, b) => a.name.localeCompare(b.name))
   return { roots, items }
+}
+
+/**
+ * Disk scan merged with the live official catalog (skill.list RPC, addressed
+ * by the most recent session). Filesystem entries get `inOfficialCatalog`;
+ * catalog entries with no filesystem match — engine/plugin-bundled skills at
+ * the official BUNDLED rank 600, which the wire projection does not label —
+ * are appended as read-only rows. When the service is offline the merge is
+ * skipped and `official.available` reports false with the reason.
+ */
+async function listMerged() {
+  const local = list()
+  const official = { available: false, error: null }
+  let catalog = null
+  try {
+    const sessions = await callRpc('session.list', {})
+    const sessionId = sessions?.items?.[0]?.sessionId
+    if (typeof sessionId !== 'string' || sessionId === '') {
+      official.error = '还没有任何会话，启动一次对话后即可读取官方目录'
+      return { ...local, official }
+    }
+    catalog = await callRpc('skill.list', { sessionId })
+  } catch (error) {
+    official.error = error.message
+    return { ...local, official }
+  }
+  const officialSkills = Array.isArray(catalog?.skills) ? catalog.skills : []
+  const catalogNames = new Set(officialSkills.map((skill) => skill.name))
+  for (const item of local.items) item.inOfficialCatalog = catalogNames.has(item.name)
+  const localNames = new Set(local.items.map((item) => item.name))
+  for (const skill of officialSkills) {
+    if (typeof skill?.name !== 'string' || localNames.has(skill.name)) continue
+    local.items.push({
+      name: skill.name,
+      description: typeof skill.description === 'string' ? skill.description : '',
+      whenToUse: typeof skill.whenToUse === 'string' ? skill.whenToUse : '',
+      rootId: 'official-bundled',
+      rootLabel: '官方目录（引擎/插件内置）',
+      rank: BUNDLED_RANK,
+      path: null,
+      isBundle: true,
+      modelInvocable: skill.modelInvocable !== false,
+      userInvocable: true,
+      issues: [],
+      shadowedBy: null,
+      impliedName: skill.name,
+      readOnly: true,
+      inOfficialCatalog: true,
+    })
+  }
+  local.items.sort((a, b) => a.name.localeCompare(b.name))
+  official.available = true
+  return { ...local, official }
 }
 
 function buildItem(parsed, root, skillPath, impliedName, isBundle) {
@@ -340,4 +402,4 @@ function watchRoots() {
   }
 }
 
-module.exports = { events, list, install, installPaths, searchGitHub, remove, toggleModelInvocation, watchRoots, NAME_PATTERN }
+module.exports = { events, list, listMerged, install, installPaths, searchGitHub, remove, toggleModelInvocation, watchRoots, NAME_PATTERN }

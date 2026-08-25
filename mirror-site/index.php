@@ -2,6 +2,11 @@
 /** DeepSeek Harness Desktop — 产品页 / 镜像与下载中心。
  * 视觉风格对齐 deepseek.com/harness：浅色、编辑排版、克制留白。 */
 require __DIR__ . '/lib.php';
+$config = require __DIR__ . '/mirror-config.php';
+
+// Serving the homepage also refreshes the mirror in the background when the
+// manifest is stale, so the download center stays current without any cron.
+mirror_maybe_lazy_sync($config);
 
 $latest = read_manifest('latest.json');
 $feed = read_manifest('feed.json');
@@ -191,6 +196,7 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
     <a href="#screens">界面</a>
     <a href="#downloads">下载</a>
     <a href="#mirror">镜像</a>
+    <a href="docs.php">操作文档</a>
     <a href="#community">社区</a>
     <a class="gh" href="<?= h($cfg['github_url']) ?>" target="_blank" rel="noopener">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
@@ -202,7 +208,7 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
 <header class="hero"><div class="wrap">
   <span class="eyebrow"><i></i>Desktop Edition · v<?= h($feed['version'] ?? '1.3.1') ?></span>
   <h1>DeepSeek Harness，<br><span class="thin">桌面级形态。</span></h1>
-  <p class="lead">官方引擎随包内置，独立运行时，无需安装任何依赖。多模态对话、Skill 生态、MCP 管理、账户与用量一览——官方体验之上，桌面级的完整。</p>
+  <p class="lead">官方引擎随包内置，独立运行时，无需安装任何依赖。模型与多模态管理回归官方「模型」板块，桌面端专注服务托管、Skill 生态、MCP 管理与账户用量——官方体验之上，桌面级的完整。</p>
   <div class="cta">
     <?php if ($desktopUrl): ?>
     <a class="btn primary" href="<?= h($desktopUrl) ?>">
@@ -235,11 +241,11 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
   </div>
   <div class="features">
     <div class="feature"><span class="no">01</span><h3>内置服务，免装 Node.js</h3><p>随包携带官方引擎与独立 Node 运行时，应用自动启动并管理本地 Harness 服务；已在运行的服务直接唤醒复用。</p></div>
-    <div class="feature"><span class="no">02</span><h3>多模态对话流</h3><p>多模态能力直接集成进官方对话流：支持图片的模型正常上传；纯文本模型在上传图片时会被拦截，并给出可一键切换的多模态模型建议。</p></div>
-    <div class="feature"><span class="no">03</span><h3>账户与用量</h3><p>查看当前 API Key 对应账户的余额，统计每个任务的 Token 消耗，按日与累计汇总，成本一目了然。</p></div>
+    <div class="feature"><span class="no">02</span><h3>官方模型 · 原生多模态</h3><p>官方「模型」板块一站管理密钥、第三方 Provider（含 Anthropic 原生协议）与逐模型图片输入声明；官方引擎原生处理多模态请求，桌面端零干预。</p></div>
+    <div class="feature"><span class="no">03</span><h3>账户与用量</h3><p>按官方凭据解析 API Key 查询账户余额；直接读取引擎会话日志统计每个模型的 token 消耗，按日与累计汇总，一目了然。</p></div>
     <div class="feature"><span class="no">04</span><h3>Skill 加载器</h3><p>全根目录扫描与遮蔽校验，支持 GitHub 搜索安装、Git 仓库、本地文件夹，以及把 Skill 文件直接拖入窗口完成安装。</p></div>
     <div class="feature"><span class="no">05</span><h3>MCP 插件与连接测试</h3><p>可视化增删改 MCP 服务器并一键测试连接、列出工具清单；官方插件列表内附中文功能注解，配置不改动任何官方文件。</p></div>
-    <div class="feature"><span class="no">06</span><h3>高速更新镜像</h3><p>预构建引擎包与桌面版更新默认绑定本站，绕开缓慢的官方源；仅在镜像不可用时才提示切换备用地址。</p></div>
+    <div class="feature"><span class="no">06</span><h3>高速更新镜像</h3><p>预构建引擎包与桌面版更新默认绑定本站，镜像自动跟进官方最新版本；仅在镜像不可用时才提示切换备用地址。</p></div>
   </div>
 </div></section>
 
@@ -251,7 +257,7 @@ footer .sep { margin: 0 10px; color: var(--line-strong); }
   </div>
   <div class="shots">
     <?php
-      $captions = ['对话主界面 · 多模态状态徽标', '设置面板 · 桌面端分区', '官方插件列表 · 内置插件中文注解', '账户与用量 · 余额与任务消耗统计'];
+      $captions = ['对话主界面 · 官方原生多模态', '设置面板 · 桌面端分区', '官方插件列表 · 内置插件中文注解', '账户与用量 · 余额与模型消耗统计'];
       foreach ($screens as $i => $src): ?>
     <figure>
       <img src="<?= h($src) ?>" alt="DeepSeek Harness Desktop 界面截图 <?= $i + 1 ?>" loading="lazy">

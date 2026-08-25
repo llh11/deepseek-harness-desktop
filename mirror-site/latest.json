@@ -1,6 +1,8 @@
 {
-  "version": "0.1.0-rc.7",
-  "bundle": "dl.php?f=engine/dsh-engine-0.1.0-rc.7.tgz",
-  "notes": "DeepSeek Harness 官方引擎 0.1.0-rc.7 预构建镜像（含完整依赖树，免 npm 官方源下载）",
-  "syncedAt": "2026-08-18T00:00:00+08:00"
+  "version": "0.1.1-rc.2",
+  "bundle": "dl.php?f=engine/dsh-engine-0.1.1-rc.2.tgz",
+  "notes": "DeepSeek Harness 官方引擎 0.1.1-rc.2 预构建镜像（含完整依赖树，免 npm 官方源下载）",
+  "sha256": "b10a866985724570cce7ed0851c3f6dffe595b7f226e8ee1f8b84079d99c40f3",
+  "size": 49901219,
+  "syncedAt": "2026-08-22T00:00:00+08:00"
 }

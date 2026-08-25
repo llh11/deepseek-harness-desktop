@@ -5,6 +5,7 @@
  * JSON feed ({ version, url, notes }) configured in the settings center.
  */
 const { spawn } = require('node:child_process')
+const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
 const { app } = require('electron')
@@ -12,6 +13,7 @@ const settings = require('./settings-store')
 const service = require('./service-manager')
 const runtime = require('./runtime')
 const { desktopDir, ensureDesktopDir } = require('./paths')
+const { compareVersions } = require('./version')
 
 const REGISTRIES = ['https://registry.npmjs.org', 'https://registry.npmmirror.com']
 
@@ -30,22 +32,6 @@ function withFallbacks(configured, fallbacks) {
     if (!list.includes(normalized)) list.push(normalized)
   }
   return list
-}
-
-function compareVersions(left, right) {
-  const normalize = (value) => String(value ?? '').replace(/^v/, '').split(/[.-]/).map((part) => (/^\d+$/.test(part) ? Number(part) : part))
-  const a = normalize(left)
-  const b = normalize(right)
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const partA = a[index]
-    const partB = b[index]
-    if (partA === undefined) return -1
-    if (partB === undefined) return 1
-    if (partA === partB) continue
-    if (typeof partA === 'number' && typeof partB === 'number') return partA < partB ? -1 : 1
-    return String(partA) < String(partB) ? -1 : 1
-  }
-  return 0
 }
 
 async function fetchJson(url, timeoutMs = 10_000) {
@@ -84,6 +70,7 @@ async function desktopFeed(feedUrl) {
         latest: payload.version,
         url: typeof payload.url === 'string' ? payload.url : null,
         notes: typeof payload.notes === 'string' ? payload.notes : null,
+        sha256: typeof payload.sha256 === 'string' && payload.sha256.trim() !== '' ? payload.sha256.trim().toLowerCase() : null,
         source: candidate,
       }
     } catch (error) {
@@ -93,18 +80,31 @@ async function desktopFeed(feedUrl) {
   throw new Error(errors.join('；'))
 }
 
-/** Engine mirror (加速更新镜像子站) check: {mirror}/latest.json → { version, bundle, notes }. */
+/** Engine mirror (加速更新镜像子站) check. The mirror serves a dynamic
+ * `latest.php` (which also self-syncs the mirror against the upstream
+ * registry when stale) plus the static `latest.json` snapshot; both carry
+ * { version, bundle, notes }. */
 async function mirrorLatest(mirrorUrl) {
   if (typeof mirrorUrl !== 'string' || mirrorUrl.trim() === '') return null
   const base = mirrorUrl.trim().replace(/\/+$/, '')
-  const payload = await fetchJson(`${base}/latest.json`, 12_000)
-  if (typeof payload?.version !== 'string') throw new Error('镜像 latest.json 缺少 version 字段')
-  return {
-    base,
-    latest: payload.version,
-    bundle: typeof payload.bundle === 'string' ? payload.bundle : null,
-    notes: typeof payload.notes === 'string' ? payload.notes : null,
+  const errors = []
+  for (const manifest of ['latest.php', 'latest.json']) {
+    try {
+      const payload = await fetchJson(`${base}/${manifest}`, 12_000)
+      if (typeof payload?.version !== 'string') throw new Error('镜像版本清单缺少 version 字段')
+      return {
+        base,
+        latest: payload.version,
+        bundle: typeof payload.bundle === 'string' && payload.bundle.trim() !== '' ? payload.bundle : null,
+        notes: typeof payload.notes === 'string' ? payload.notes : null,
+        sha256: typeof payload.sha256 === 'string' && payload.sha256.trim() !== '' ? payload.sha256.trim().toLowerCase() : null,
+        pendingBuild: payload.pendingBuild === true,
+      }
+    } catch (error) {
+      errors.push(`${manifest}: ${error.message}`)
+    }
   }
+  throw new Error(errors.join('；'))
 }
 
 /** Mirror check across the bound mirror and its fallbacks (same rule as the
@@ -223,6 +223,27 @@ async function downloadTo(url, dest, send) {
   return received
 }
 
+/** Stream one file through SHA-256; hex digest, lowercase. */
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256')
+    const stream = fs.createReadStream(file)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex')))
+  })
+}
+
+/** Verify a downloaded file against an expected sha256; deletes and throws on mismatch. */
+async function verifySha256(file, expected) {
+  if (typeof expected !== 'string' || expected.trim() === '') return
+  const actual = await sha256File(file)
+  if (actual !== expected.trim().toLowerCase()) {
+    fs.rmSync(file, { force: true })
+    throw new Error(`文件校验失败（sha256 不匹配，期望 ${expected.trim().toLowerCase().slice(0, 12)}…，实际 ${actual.slice(0, 12)}…），已删除损坏的下载`)
+  }
+}
+
 /** Extract a .tgz into `dest` with the system tar (bsdtar on Windows 10+). */
 function extractTgz(file, dest) {
   return new Promise((resolve, reject) => {
@@ -245,7 +266,11 @@ function extractTgz(file, dest) {
 async function applyMirrorUpdate(mirrorUrl, send) {
   const info = await mirrorLatestWithFallback(mirrorUrl)
   if (!info) throw new Error('未配置加速镜像地址')
-  if (!info.bundle) throw new Error('镜像 latest.json 缺少 bundle 字段')
+  if (!info.bundle) {
+    throw new Error(info.pendingBuild
+      ? `镜像已同步官方 ${info.latest}，但引擎包尚未构建完成（服务器缺少 Node 或构建未完成）`
+      : '镜像 latest.json 缺少 bundle 字段')
+  }
   const bundleUrl = info.bundle.startsWith('http') ? info.bundle : `${info.base}/${info.bundle.replace(/^\/+/, '')}`
   send(`镜像最新版本：${info.latest}，正在从镜像 ${info.base} 下载引擎包…`)
   const cacheDir = path.join(desktopDir, 'update-cache')
@@ -253,6 +278,10 @@ async function applyMirrorUpdate(mirrorUrl, send) {
   fs.mkdirSync(cacheDir, { recursive: true })
   const file = path.join(cacheDir, `dsh-engine-${info.latest}.tgz`)
   await downloadTo(bundleUrl, file, send)
+  if (info.sha256) {
+    send('正在校验引擎包完整性（sha256）…')
+    await verifySha256(file, info.sha256)
+  }
   const prefix = path.join(desktopDir, 'dsh-service')
   send('正在解压引擎包到本地服务目录…')
   fs.rmSync(path.join(prefix, 'node_modules'), { recursive: true, force: true })
@@ -322,6 +351,10 @@ async function downloadDesktopUpdate(send = () => {}) {
   const dest = path.join(cacheDir, fileName)
   send(`正在从 ${new URL(downloadUrl).origin} 下载桌面版 ${feed.latest}…`)
   await downloadTo(downloadUrl, dest, send)
+  if (feed.sha256) {
+    send('正在校验安装包完整性（sha256）…')
+    await verifySha256(dest, feed.sha256)
+  }
   send(`下载完成：${dest}`)
   return { file: dest, version: feed.latest }
 }

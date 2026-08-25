@@ -1,8 +1,8 @@
 'use strict'
 /**
  * DeepSeek Harness Desktop entry point: creates the web-UI window and the
- * control center, owns the tray, wires IPC, and keeps the managed service +
- * gateway lifecycles in sync with the visual settings.
+ * control center, owns the tray, wires IPC, and keeps the managed service
+ * lifecycle in sync with the visual settings.
  */
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
 const path = require('node:path')
@@ -12,11 +12,12 @@ const service = require('./lib/service-manager')
 const tray = require('./lib/tray')
 const skills = require('./lib/skill-manager')
 const mcp = require('./lib/mcp-manager')
-const providers = require('./lib/provider-manager')
-const gateway = require('./lib/gateway')
+const balances = require('./lib/balances')
+const providerMigration = require('./lib/provider-migrate')
 const updater = require('./lib/updater')
 const plugins = require('./lib/plugin-explainer')
-const usage = require('./lib/usage-tracker')
+const officialUsage = require('./lib/official-usage')
+const { callRpc } = require('./lib/service-rpc')
 const { ensureDesktopDir } = require('./lib/paths')
 
 let mainWindow = null
@@ -89,15 +90,6 @@ function onServiceStatus(status) {
   if (status.status === 'stopped' || status.status === 'error') originLoaded = false
 }
 
-/** Keep the loopback gateway aligned with settings and provider routing. */
-function syncGateway() {
-  const { gateway: gatewaySettings } = settings.get()
-  const needed = gatewaySettings.enabled
-    || providers.list().some((provider) => provider.viaGateway)
-  if (needed && !gateway.isRunning()) gateway.start(gatewaySettings.port)
-  if (!needed && gateway.isRunning()) gateway.stop()
-}
-
 function registerIpc() {
   ipcMain.handle('app:info', () => ({
     version: app.getVersion(),
@@ -111,13 +103,6 @@ function registerIpc() {
     const after = settings.get()
     if (after.launchOnLogin !== before.launchOnLogin) {
       app.setLoginItemSettings({ openAtLogin: after.launchOnLogin })
-    }
-    if (after.gateway.enabled !== before.gateway.enabled || after.gateway.port !== before.gateway.port) {
-      syncGateway()
-      // Gateway baseURLs are baked into settings.yaml; re-project after a port change.
-      if (after.gateway.port !== before.gateway.port && providers.list().some((provider) => provider.viaGateway)) {
-        providers.projectToSettings()
-      }
     }
     if (after.workspacePath !== before.workspacePath) skills.watchRoots()
     return after
@@ -135,12 +120,13 @@ function registerIpc() {
   ipcMain.handle('service:versions', () => service.versionInfo())
 
   ipcMain.handle('skills:list', () => skills.list())
+  ipcMain.handle('skills:listMerged', () => skills.listMerged())
   ipcMain.handle('skills:install', (_event, payload) => skills.install(payload))
   ipcMain.handle('skills:installPaths', (_event, payload) => skills.installPaths(payload))
   ipcMain.handle('skills:searchGitHub', (_event, payload) => skills.searchGitHub(payload))
   ipcMain.handle('skills:remove', (_event, payload) => skills.remove(payload))
   ipcMain.handle('skills:toggle', (_event, { path: skillPath, enabled }) => skills.toggleModelInvocation(skillPath, enabled))
-  ipcMain.handle('skills:refresh', () => { skills.watchRoots(); return skills.list() })
+  ipcMain.handle('skills:refresh', () => { skills.watchRoots(); return skills.listMerged() })
 
   ipcMain.handle('mcp:state', () => mcp.state())
   ipcMain.handle('mcp:save', (_event, server) => mcp.save(server))
@@ -151,15 +137,16 @@ function registerIpc() {
 
   ipcMain.handle('plugins:catalog', () => plugins.catalog())
 
-  ipcMain.handle('providers:list', () => providers.list())
-  ipcMain.handle('providers:save', (_event, provider) => { const result = providers.save(provider); syncGateway(); return result })
-  ipcMain.handle('providers:remove', (_event, id) => { const result = providers.remove(id); syncGateway(); return result })
-  ipcMain.handle('providers:fetchModels', (_event, payload) => providers.fetchModels(payload))
-  ipcMain.handle('providers:suggestInput', (_event, modelId) => providers.suggestInput(modelId))
-  ipcMain.handle('providers:balances', () => providers.balances())
-
-  ipcMain.handle('usage:stats', () => usage.stats())
-  ipcMain.handle('usage:clear', () => { usage.clear(); return usage.stats() })
+  ipcMain.handle('balances:list', () => balances.balances())
+  ipcMain.handle('official-usage:stats', () => officialUsage.stats())
+  ipcMain.handle('official:llmProviders', async () => {
+    try {
+      const value = await callRpc('llm.providers', {})
+      return { available: true, providers: value?.providers ?? [] }
+    } catch (error) {
+      return { available: false, error: error.message, providers: [] }
+    }
+  })
 
   ipcMain.handle('updates:check', () => updater.checkAll())
   ipcMain.handle('updates:applyOfficial', () => updater.applyOfficialUpdate((line) => sendToWindows('updates:progress', line)))
@@ -185,6 +172,17 @@ if (!gotLock) {
     settings.load()
     ensureDesktopDir()
     await icons.init()
+
+    // One-time carry-over from the removed 1.3.x desktop provider manager:
+    // legacy providers become direct official llm-pi-ai routes in settings.yaml.
+    try {
+      const migration = providerMigration.migrate()
+      if (migration.migrated > 0) {
+        console.log(`[desktop] 已迁移 ${migration.migrated} 个第三方 Provider 为官方直连路由：${migration.details.join('；')}`)
+      }
+    } catch (error) {
+      console.error('[desktop] Provider 迁移失败：', error)
+    }
 
     service.events.on('status', onServiceStatus)
     skills.events.on('changed', () => sendToWindows('skills:changed', { at: Date.now() }))
@@ -268,7 +266,6 @@ if (!gotLock) {
     })
 
     registerIpc()
-    syncGateway()
     if (settings.get().autoStartService) service.start()
 
     app.on('activate', () => showMainWindow())
@@ -278,7 +275,6 @@ if (!gotLock) {
     if (quitting) return
     quitting = true
     event.preventDefault()
-    try { await gateway.stop() } catch { /* already stopped */ }
     if (settings.get().stopServiceOnQuit && service.describe().status === 'running-managed') {
       await service.stop()
     }

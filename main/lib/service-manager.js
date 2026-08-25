@@ -13,6 +13,7 @@ const { app } = require('electron')
 const settings = require('./settings-store')
 const runtime = require('./runtime')
 const { desktopDir, files } = require('./paths')
+const { compareVersions } = require('./version')
 
 const LOG_LIMIT = 500
 const events = new EventEmitter()
@@ -91,6 +92,31 @@ function webArgs() {
   return args
 }
 
+/** Since 0.1.0-rc.8 `dsh web` opens the default browser unless --no-open is
+ * passed; the desktop window replaces the browser, so managed services opt
+ * out whenever the resolved engine understands the flag. */
+function supportsNoOpen(version) {
+  return typeof version === 'string' && compareVersions(version, '0.1.0-rc.8') >= 0
+}
+
+function noOpenArgs(version) {
+  return supportsNoOpen(version) ? ['--no-open'] : []
+}
+
+/** The global dsh shim does not advertise its version; ask its --help once. */
+let globalNoOpen = null
+function probeGlobalNoOpen(command) {
+  if (globalNoOpen !== null) return globalNoOpen
+  try {
+    const wrapped = commandLine(command, ['web', '--help'])
+    const probe = spawnSync(wrapped.command, wrapped.args, { windowsHide: true, timeout: 15_000 })
+    globalNoOpen = probe.status === 0 && `${probe.stdout ?? ''}${probe.stderr ?? ''}`.includes('--no-open')
+  } catch {
+    globalNoOpen = false
+  }
+  return globalNoOpen
+}
+
 function autoDetectRepo() {
   const roots = [path.resolve(app.getAppPath(), '..'), path.join(require('node:os').homedir())]
   const names = ['deepseek-harness-master', 'deepseek-harness']
@@ -118,7 +144,7 @@ function resolveCandidates() {
     const node = runtime.nodeExe()
     list.push({
       kind: 'updated', label: `官方服务（本地更新版${readVersion(updatedPkgDir) ? ` ${readVersion(updatedPkgDir)}` : ''}）`,
-      run: { command: node ?? 'node', args: [updatedBin, ...webArgs()], env: {} },
+      run: { command: node ?? 'node', args: [updatedBin, ...webArgs(), ...noOpenArgs(readVersion(updatedPkgDir))], env: {} },
       version: readVersion(updatedPkgDir),
     })
   }
@@ -134,7 +160,7 @@ function resolveCandidates() {
         kind: 'bundled', label: node ? '内置服务（随包 Node 运行时）' : '内置服务（Electron Node，兼容模式）',
         run: {
           command: node ?? process.execPath,
-          args: [bin, ...webArgs()],
+          args: [bin, ...webArgs(), ...noOpenArgs(readVersion(pkgDir))],
           env: node ? {} : { ELECTRON_RUN_AS_NODE: '1' },
         },
         version: readVersion(pkgDir),
@@ -148,7 +174,7 @@ function resolveCandidates() {
     if (pnpm) {
       list.push({
         kind: 'source', label: `源码运行（${repo}）`,
-        run: { ...commandLine('pnpm', ['--dir', repo, 'dsh', ...webArgs()]), env: {} },
+        run: { ...commandLine('pnpm', ['--dir', repo, 'dsh', ...webArgs(), ...noOpenArgs(readVersion(path.join(repo, 'apps', 'cli')))]), env: {} },
         version: readVersion(path.join(repo, 'apps', 'cli')),
       })
     }
@@ -158,7 +184,7 @@ function resolveCandidates() {
   if (globalDsh) {
     list.push({
       kind: 'global', label: `全局安装（${globalDsh}）`,
-      run: { ...commandLine('dsh', webArgs()), env: {} },
+      run: { ...commandLine('dsh', [...webArgs(), ...(probeGlobalNoOpen(globalDsh) ? ['--no-open'] : [])]), env: {} },
       version: null,
     })
   }
@@ -167,7 +193,7 @@ function resolveCandidates() {
   if (npx) {
     list.push({
       kind: 'npx', label: 'npx 自动安装（@deepseek-ai/dsh@latest）',
-      run: { ...commandLine('npx', ['-y', '@deepseek-ai/dsh@latest', ...webArgs()]), env: {} },
+      run: { ...commandLine('npx', ['-y', '@deepseek-ai/dsh@latest', ...webArgs(), '--no-open']), env: {} },
       version: null,
     })
   }

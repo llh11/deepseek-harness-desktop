@@ -20,8 +20,6 @@ const DEFAULTS = {
   launchOnLogin: false,
   /** Optional workspace whose project skill roots appear in the Skill loader. */
   workspacePath: '',
-  /** Multimodal translation gateway. */
-  gateway: { enabled: false, port: 3081 },
   /** Desktop-app update feed (JSON: { "version", "url", "notes" }). Bound to the
    * official mirror subsite by default; alternates are tried only when this
    * address is unreachable (see updater.DESKTOP_FEED_FALLBACKS). */
@@ -38,7 +36,7 @@ function load() {
   try {
     const raw = fs.readFileSync(files.desktopSettings, 'utf8')
     const parsed = JSON.parse(raw)
-    state = { ...DEFAULTS, ...parsed, gateway: { ...DEFAULTS.gateway, ...(parsed.gateway ?? {}) } }
+    state = { ...DEFAULTS, ...parsed }
   } catch {
     state = { ...DEFAULTS }
   }

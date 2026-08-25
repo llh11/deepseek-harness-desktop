@@ -1,31 +1,27 @@
 'use strict'
 /**
- * Chat-flow bridge (v1.3): integrates the desktop's multimodal capability and
- * the Skill/MCP quick-insert palette directly into the OFFICIAL conversation
+ * Chat-flow bridge: integrates the desktop's Skill/MCP quick-insert palette
+ * and conversation-view enhancements directly into the OFFICIAL conversation
  * composer, without modifying any official file.
  *
- *  - Reads the composer's model trigger to learn the active model, matches it
- *    against the desktop provider registry, and shows a modality chip
- *    (多模态 / 纯文本) next to the model selector.
- *  - When draft images coexist with a text-only model — after attaching or
- *    after a model switch — an inline banner offers one-click enablement of
- *    image input for that model (writes the official settings.yaml modality
- *    declaration), so the conversation flow never breaks on a rejected send.
  *  - A quick-insert trigger beside the official command button opens a palette
  *    of installed Skills and MCP tools; choosing one inserts its invocation
  *    token into the draft at the caret.
+ *  - The official image lightbox gains wheel zoom, drag panning, double-click
+ *    reset, and a download button.
+ *  - Plugin names inside the official settings dialog get inline Chinese
+ *    annotations.
+ *
+ * Since 1.4.0 the official engine handles multimodal input natively (the
+ * official "模型" section declares per-model input modalities, and the
+ * composer accepts images for every model that declares them), so the former
+ * desktop-side "多模态 / 纯文本" chip and upload gating are gone — the model
+ * selector's own capabilities are authoritative now.
  *
  * @module dsh-desktop/chat-enhance
  */
 
 const CSS = `
-.dshdc-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); background: transparent; color: var(--dsw-alias-label-tertiary, #888); font-size: 12px; line-height: 18px; cursor: default; white-space: nowrap; font-family: inherit; }
-.dshdc-chip-multi { color: var(--dsw-alias-state-success-primary, #3fb96c); border-color: var(--dsw-alias-state-success-primary, #3fb96c); }
-.dshdc-chip-action { cursor: pointer; color: var(--dsw-alias-label-primary, #ddd); }
-.dshdc-chip-action:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
-.dshdc-banner { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--dsw-alias-state-warn-label, #d9a13b); border-radius: 10px; color: var(--dsw-alias-label-secondary, #aaa); font-size: 12.5px; line-height: 18px; font-family: inherit; }
-.dshdc-banner button { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3)); background: transparent; color: var(--dsw-alias-label-primary, #ddd); border-radius: 12px; height: 24px; padding: 0 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
-.dshdc-banner button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
 .dshdc-quick { position: relative; }
 .dshdc-quick-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.25)); background: transparent; color: var(--dsw-alias-label-tertiary, #888); cursor: pointer; font-family: inherit; }
 .dshdc-quick-btn:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); color: var(--dsw-alias-label-primary, #ddd); }
@@ -39,10 +35,6 @@ const CSS = `
 .dshdc-item small { color: var(--dsw-alias-label-tertiary, #888); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dshdc-empty { padding: 14px; text-align: center; color: var(--dsw-alias-label-quaternary, #777); font-size: 12px; }
 .dshdc-plugnote { display: block; margin-top: 2px; font-size: 11.5px; line-height: 16px; color: var(--dsw-alias-label-quaternary, #8a8f9c); font-family: inherit; }
-.dshdc-suggest { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--dsw-alias-state-warn-label, #d9a13b); border-radius: 10px; color: var(--dsw-alias-label-secondary, #aaa); font-size: 12.5px; line-height: 18px; font-family: inherit; }
-.dshdc-suggest button { border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.3)); background: transparent; color: var(--dsw-alias-label-primary, #ddd); border-radius: 12px; height: 24px; padding: 0 10px; font-size: 12px; cursor: pointer; font-family: inherit; white-space: nowrap; }
-.dshdc-suggest button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,.12)); }
-.dshdc-suggest .dshdc-suggest-primary { border-color: var(--dsw-alias-button-primary-fill, #4d6bfe); color: var(--dsw-alias-button-primary-fill, #4d6bfe); }
 `
 
 /** Initialize the chat-flow bridge. @param ipcRenderer - Electron ipcRenderer. */
@@ -65,269 +57,6 @@ function init(ipcRenderer) {
     clearTimeout(toast.timer)
     toast.timer = setTimeout(() => { node.style.display = 'none' }, 3400)
     node.style.display = ''
-  }
-
-  /* ---------- provider modality knowledge ---------- */
-  let providersCache = []
-  let providersLoadedAt = 0
-  async function providerIndex() {
-    if (Date.now() - providersLoadedAt > 30_000 || providersCache.length === 0) {
-      try {
-        providersCache = await call('providers:list')
-        providersLoadedAt = Date.now()
-      } catch { /* keep stale */ }
-    }
-    // Map: lowercase model id → { provider, model }
-    const map = new Map()
-    for (const provider of providersCache) {
-      for (const model of provider.models ?? []) {
-        map.set(`${provider.id}/${model.id}`.toLowerCase(), { provider, model })
-        map.set(model.id.toLowerCase(), { provider, model })
-        const display = (model.displayName ?? model.id).toLowerCase()
-        map.set(display, { provider, model })
-      }
-    }
-    return map
-  }
-
-  /** Best-effort match of the composer label to a managed provider model. */
-  function matchModel(label, map) {
-    const needle = String(label ?? '').trim().toLowerCase()
-    if (needle === '') return null
-    if (map.has(needle)) return map.get(needle)
-    for (const [key, value] of map) {
-      if (needle.includes(key) || key.includes(needle)) return value
-    }
-    return null
-  }
-
-  function acceptsImage(entry) {
-    return acceptsMedia(entry, 'image')
-  }
-
-  function acceptsMedia(entry, kind) {
-    if (!entry) return false
-    const model = entry.model
-    if (Array.isArray(model.input) && model.input.includes(kind)) return true
-    if (!model.input && Array.isArray(entry.provider.defaultInput)) return entry.provider.defaultInput.includes(kind)
-    return false
-  }
-
-  /** Pick a model that accepts the given media kind — same provider first,
-   * then any provider, preferring vision-flavoured names. */
-  async function recommendMediaModel(kind, currentProviderId) {
-    const map = await providerIndex()
-    const visionish = /(gpt-4o|gpt-5|claude|gemini|glm-.*v|vl|qvq|vision|omni)/i
-    const seen = new Set()
-    const candidates = []
-    for (const value of map.values()) {
-      const key = `${value.provider.id}/${value.model.id}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      if (!acceptsMedia(value, kind)) continue
-      candidates.push(value)
-    }
-    if (candidates.length === 0) return null
-    candidates.sort((a, b) => {
-      const ap = a.provider.id === currentProviderId ? 0 : 1
-      const bp = b.provider.id === currentProviderId ? 0 : 1
-      if (ap !== bp) return ap - bp
-      return Number(!visionish.test(a.model.id)) - Number(!visionish.test(b.model.id))
-    })
-    return candidates[0]
-  }
-
-  /** Switch the official composer model by driving its own menu. */
-  async function switchToModel(entry) {
-    const wanted = (entry.model.displayName ?? entry.model.id).trim()
-    const trigger = composerState.trigger
-    if (!trigger) return false
-    trigger.click()
-    await new Promise((resolve) => setTimeout(resolve, 220))
-    const items = [...document.querySelectorAll('[role="menu"] [role="menuitem"], [role="listbox"] [role="option"], [data-radix-collection-item]')]
-    const needle = wanted.toLowerCase()
-    const hit = items.find((item) => item.textContent.trim().toLowerCase().includes(needle))
-    if (hit) {
-      hit.click()
-      return true
-    }
-    // Close whatever menu we opened and leave the choice to the user.
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    return false
-  }
-
-  /* ---------- composer discovery ---------- */
-  const composerState = {
-    card: null, trigger: null, label: '', chip: null, banner: null,
-    quick: null, hasImages: false, busy: false, entry: null, suggest: null,
-  }
-
-  function findComposer() {
-    return document.querySelector('[data-composer-card]')
-  }
-
-  function findModelTrigger(card) {
-    for (const button of card.querySelectorAll('button[aria-haspopup="menu"]')) {
-      // The ModelSelect trigger carries a chevron and a plain-text label span.
-      if (button.querySelector('svg') && button.textContent.trim() !== '') return button
-    }
-    return null
-  }
-
-  function modelLabelOf(trigger) {
-    const span = trigger?.querySelector('span')
-    return (span?.textContent ?? trigger?.textContent ?? '').split('·')[0].trim()
-  }
-
-  function draftHasImages(card) {
-    return card.querySelectorAll('img').length > 0
-  }
-
-  function findTextarea(card) {
-    return card.querySelector('textarea')
-  }
-
-  /* ---------- modality chip ---------- */
-  async function refreshChip() {
-    const { card, trigger, chip } = composerState
-    if (!card || !trigger || !chip) return
-    const map = await providerIndex()
-    const entry = matchModel(modelLabelOf(trigger), map)
-    composerState.entry = entry
-    const image = acceptsImage(entry)
-    const managed = entry !== null
-    chip.classList.toggle('dshdc-chip-multi', image)
-    chip.classList.toggle('dshdc-chip-action', !image && managed)
-    chip.textContent = image ? '多模态 · 支持图片' : '纯文本'
-    chip.title = image
-      ? '当前模型已声明视觉输入，可直接发送图片'
-      : managed
-        ? '当前模型按纯文本处理，上传图片会被拦截。点击为其开启图片输入'
-        : '当前模型未在桌面端 Provider 中登记模态信息'
-    chip.dataset.managed = managed ? '1' : ''
-    chip.dataset.modelKey = managed ? `${entry.provider.id}/${entry.model.id}` : ''
-    refreshBanner()
-  }
-
-  function refreshBanner() {
-    const { card, chip, banner } = composerState
-    if (!card || !chip) return
-    const show = composerState.hasImages && !chip.classList.contains('dshdc-chip-multi') && chip.dataset.managed === '1'
-    if (!banner) return
-    banner.style.display = show ? '' : 'none'
-  }
-
-  async function enableVisionForCurrent() {
-    const key = composerState.chip?.dataset.modelKey
-    if (!key) return
-    const map = await providerIndex()
-    const entry = map.get(key.toLowerCase())
-    if (!entry) return
-    const { provider } = entry
-    const models = provider.models.map((model) => (
-      model.id === entry.model.id ? { ...model, input: ['text', 'image'] } : model
-    ))
-    try {
-      await call('providers:save', {
-        id: provider.id, displayName: provider.displayName, upstreamKind: provider.upstreamKind,
-        upstreamBaseURL: provider.upstreamBaseURL, apiKey: '', viaGateway: provider.viaGateway,
-        defaultInput: provider.defaultInput, models,
-      })
-      providersLoadedAt = 0
-      toast(`已为 ${entry.model.id} 开启图片输入（settings.yaml 已更新），重新发送即可`)
-      refreshChip()
-    } catch (error) {
-      toast(`开启失败：${error.message}`)
-    }
-  }
-
-  /* ---------- upload gating: block media the model cannot accept ---------- */
-  let suggestTimer = null
-  async function showSuggest(kind) {
-    const { card, entry } = composerState
-    if (!card) return
-    let strip = composerState.suggest
-    if (!strip || !strip.isConnected) {
-      strip = document.createElement('div')
-      strip.className = 'dshdc-suggest'
-      card.parentElement.insertBefore(strip, card)
-      composerState.suggest = strip
-    }
-    const mediaLabel = kind === 'video' ? '视频' : '图片'
-    const modelName = entry ? (entry.model.displayName ?? entry.model.id) : (composerState.label || '当前模型')
-    strip.replaceChildren()
-    const text = document.createElement('span')
-    text.textContent = `已拦截${mediaLabel}上传：模型「${modelName}」不支持${mediaLabel}输入。`
-    strip.appendChild(text)
-
-    const rec = await recommendMediaModel(kind, entry?.provider.id)
-    if (rec) {
-      const recName = rec.model.displayName ?? rec.model.id
-      const switchBtn = document.createElement('button')
-      switchBtn.type = 'button'
-      switchBtn.className = 'dshdc-suggest-primary'
-      switchBtn.textContent = `切换到 ${recName}`
-      switchBtn.addEventListener('click', async () => {
-        const ok = await switchToModel(rec)
-        toast(ok ? `已切换到 ${recName}，请重新上传${mediaLabel}` : `请在模型菜单中手动选择 ${recName}`)
-        strip.style.display = 'none'
-      })
-      strip.appendChild(switchBtn)
-    }
-    if (entry) {
-      const enable = document.createElement('button')
-      enable.type = 'button'
-      enable.textContent = '为该模型开启图片输入'
-      enable.addEventListener('click', () => { enableVisionForCurrent(); strip.style.display = 'none' })
-      strip.appendChild(enable)
-    }
-    const dismiss = document.createElement('button')
-    dismiss.type = 'button'
-    dismiss.textContent = '知道了'
-    dismiss.addEventListener('click', () => { strip.style.display = 'none' })
-    strip.appendChild(dismiss)
-    strip.style.display = ''
-    clearTimeout(suggestTimer)
-    suggestTimer = setTimeout(() => { if (strip.isConnected) strip.style.display = 'none' }, 12_000)
-  }
-
-  /** True and blocks the event when the media kind is unsupported. */
-  function gateMedia(kind) {
-    const entry = composerState.entry
-    if (!entry) return false // unmanaged model: leave the official flow alone
-    if (acceptsMedia(entry, kind)) return false
-    showSuggest(kind)
-    return true
-  }
-
-  function onPasteCapture(event) {
-    const items = event.clipboardData?.items ?? []
-    for (const item of items) {
-      const type = item.type ?? ''
-      if (type.startsWith('image/') && gateMedia('image')) { event.preventDefault(); event.stopImmediatePropagation(); return }
-      if (type.startsWith('video/') && gateMedia('video')) { event.preventDefault(); event.stopImmediatePropagation(); return }
-    }
-  }
-
-  function onDropCapture(event) {
-    const files = event.dataTransfer?.files ?? []
-    for (const file of files) {
-      const type = file.type ?? ''
-      if (type.startsWith('image/') && gateMedia('image')) { event.preventDefault(); event.stopImmediatePropagation(); return }
-      if (type.startsWith('video/') && gateMedia('video')) { event.preventDefault(); event.stopImmediatePropagation(); return }
-    }
-  }
-
-  function onFilePickCapture(event) {
-    const input = event.target
-    if (!(input instanceof HTMLInputElement) || input.type !== 'file') return
-    const files = [...(input.files ?? [])]
-    const blocked = files.some((file) => (file.type.startsWith('image/') && gateMedia('image')) || (file.type.startsWith('video/') && gateMedia('video')))
-    if (blocked) {
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      try { input.value = '' } catch { /* read-only in some engines */ }
-    }
   }
 
   /* ---------- official plugin list: inline Chinese annotations ---------- */
@@ -394,7 +123,7 @@ function init(ipcRenderer) {
   }
 
   function insertIntoDraft(card, text) {
-    const textarea = findTextarea(card)
+    const textarea = card.querySelector('textarea')
     if (!textarea) return
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
     const start = textarea.selectionStart ?? textarea.value.length
@@ -488,58 +217,15 @@ function init(ipcRenderer) {
   }
 
   /* ---------- composer augmentation ---------- */
+  const composerState = { card: null, quick: null }
+
+  function findComposer() {
+    return document.querySelector('[data-composer-card]')
+  }
+
   function augment(card) {
-    if (composerState.card === card && card.contains(composerState.chip)) return
+    if (composerState.card === card && card.contains(composerState.quick ?? null)) return
     composerState.card = card
-    const trigger = findModelTrigger(card)
-    composerState.trigger = trigger
-    if (!trigger) return
-
-    // Upload gating: capture-phase listeners block media the model rejects.
-    if (card.dataset.dshdcGated !== '1') {
-      card.dataset.dshdcGated = '1'
-      card.addEventListener('paste', onPasteCapture, true)
-      card.addEventListener('drop', onDropCapture, true)
-      card.addEventListener('change', onFilePickCapture, true)
-    }
-
-    // Modality chip immediately before the model trigger.
-    const chip = document.createElement('button')
-    chip.type = 'button'
-    chip.className = 'dshdc-chip'
-    chip.addEventListener('click', () => {
-      if (chip.dataset.managed === '1' && !chip.classList.contains('dshdc-chip-multi')) enableVisionForCurrent()
-    })
-    trigger.parentElement.insertBefore(chip, trigger)
-    composerState.chip = chip
-
-    // Guidance banner above the composer card.
-    const banner = document.createElement('div')
-    banner.className = 'dshdc-banner'
-    banner.style.display = 'none'
-    const text = document.createElement('span')
-    text.textContent = '草稿中的图片无法发送：当前模型按纯文本处理。'
-    const switchBtn = document.createElement('button')
-    switchBtn.type = 'button'
-    switchBtn.textContent = '切换到多模态模型'
-    switchBtn.addEventListener('click', async () => {
-      const rec = await recommendMediaModel('image', composerState.entry?.provider.id)
-      if (!rec) { toast('暂无可用的多模态模型，请先在「模型与多模态」中配置'); return }
-      const recName = rec.model.displayName ?? rec.model.id
-      const ok = await switchToModel(rec)
-      toast(ok ? `已切换到 ${recName}` : `请在模型菜单中手动选择 ${recName}`)
-    })
-    const enable = document.createElement('button')
-    enable.type = 'button'
-    enable.textContent = '为此模型开启图片输入'
-    enable.addEventListener('click', enableVisionForCurrent)
-    const dismiss = document.createElement('button')
-    dismiss.type = 'button'
-    dismiss.textContent = '知道了'
-    dismiss.addEventListener('click', () => { banner.style.display = 'none' })
-    banner.append(text, switchBtn, enable, dismiss)
-    card.parentElement.insertBefore(banner, card)
-    composerState.banner = banner
 
     // Quick-insert palette beside the official command ("+") button.
     const commands = card.querySelector('button[aria-haspopup="listbox"]')
@@ -558,8 +244,6 @@ function init(ipcRenderer) {
       commands.parentElement.insertBefore(quick, commands.nextSibling)
       composerState.quick = quick
     }
-
-    refreshChip()
   }
 
   /* ---------- lightbox fix: zoom / pan / download ----------
@@ -681,22 +365,7 @@ function init(ipcRenderer) {
     }
     const card = findComposer()
     if (card) {
-      if (card !== composerState.card || !composerState.chip || !card.contains(composerState.chip)) augment(card)
-      const trigger = findModelTrigger(card)
-      if (trigger && trigger !== composerState.trigger) {
-        composerState.trigger = trigger
-        if (composerState.chip) trigger.parentElement.insertBefore(composerState.chip, trigger)
-      }
-      const label = modelLabelOf(composerState.trigger)
-      if (label !== composerState.label) {
-        composerState.label = label
-        refreshChip()
-      }
-      const hasImages = draftHasImages(card)
-      if (hasImages !== composerState.hasImages) {
-        composerState.hasImages = hasImages
-        refreshBanner()
-      }
+      if (card !== composerState.card || !composerState.quick || !card.contains(composerState.quick)) augment(card)
     }
     const lightbox = findLightbox()
     if (lightbox) augmentLightbox(lightbox.root, lightbox.img)

@@ -177,6 +177,7 @@ const CURATED = {
   'dsh-tool-goal': { category: '工具', text: '目标工具：模型读写任务目标。' },
   'dsh-tool-jobs': { category: '工具', text: '后台作业工具：模型启动与管理长任务。' },
   'dsh-tool-pwsh': { category: '工具', text: 'PowerShell 工具（Windows）。' },
+  'dsh-tool-pwsh-persistent': { category: '工具', text: '持久 PowerShell（Windows）：跨调用保持 shell 会话状态。' },
   'dsh-tool-ralph': { category: '工具', text: 'Ralph 工具：迭代式自改进执行循环。' },
   'dsh-tool-skill': { category: '扩展', text: 'Skill 工具：模型按名调用已安装技能。' },
   'dsh-tool-str-replace-editor': { category: '工具', text: '字符串替换编辑器：精确的局部文件修改。' },

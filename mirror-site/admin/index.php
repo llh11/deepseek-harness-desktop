@@ -49,17 +49,19 @@ if ($authed && $_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['password'
     else {
         $action = $_POST['action'] ?? '';
         if ($action === 'check_official') {
-            $url = rtrim($config['upstream_registry'], '/') . '/' . $config['package_name'];
-            $ctx = stream_context_create(['http' => ['timeout' => 15], 'https' => ['timeout' => 15]]);
-            $raw = @file_get_contents($url, false, $ctx);
-            $meta = $raw ? json_decode($raw, true) : null;
-            $official = $meta['dist-tags']['latest'] ?? null;
-            $msg = $official ? "官方最新版本：{$official}" : '无法访问上游 registry';
+            $discovered = mirror_official_latest($config);
+            $msg = $discovered['ok'] ? "官方最新版本：{$discovered['version']}（来源 {$discovered['registry']}）" : $discovered['message'];
+        } elseif ($action === 'sync_official') {
+            $result = mirror_sync_official($config);
+            if ($result['ok']) $msg = $result['message'];
+            else $err = $result['message'];
         } elseif ($action === 'save_feed') {
+            $feedNow = read_manifest('feed.json') ?? [];
             write_manifest('feed.json', [
                 'version' => trim((string)($_POST['feed_version'] ?? '')),
                 'url' => trim((string)($_POST['feed_url'] ?? '')),
                 'notes' => trim((string)($_POST['feed_notes'] ?? '')),
+                'sha256' => trim((string)($_POST['feed_sha256'] ?? ($feedNow['sha256'] ?? ''))),
             ]);
             $msg = 'feed.json 已更新';
         } elseif ($action === 'save_content') {
@@ -279,8 +281,9 @@ td form .btn { margin-top:0; padding:4px 14px; font-size:12px; }
   <div class="card">
     <h2>引擎镜像（latest.json）</h2>
     <table>
-      <tr><th style="width:140px">镜像版本</th><td class="mono"><?= h($latest['version'] ?? '—') ?></td></tr>
+      <tr><th style="width:140px">镜像版本</th><td class="mono"><?= h($latest['version'] ?? '—') ?><?= !empty($latest['pendingBuild']) ? ' <span style="color:var(--err)">（待构建）</span>' : '' ?></td></tr>
       <tr><th>bundle</th><td class="mono"><?= h($latest['bundle'] ?? '—') ?></td></tr>
+      <tr><th>sha256</th><td class="mono"><?= h($latest['sha256'] ?? '—') ?></td></tr>
       <tr><th>同步时间</th><td><?= h($latest['syncedAt'] ?? '—') ?></td></tr>
     </table>
     <form method="post" style="display:inline">
@@ -288,6 +291,12 @@ td form .btn { margin-top:0; padding:4px 14px; font-size:12px; }
       <input type="hidden" name="action" value="check_official">
       <button class="btn secondary" type="submit">检查官方最新版本</button>
     </form>
+    <form method="post" style="display:inline" onsubmit="return confirm('将从上游 registry 拉取官方最新版本并自动构建引擎包（可能需要几分钟），继续？')">
+      <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+      <input type="hidden" name="action" value="sync_official">
+      <button class="btn accent" type="submit">自动同步官方版本</button>
+    </form>
+    <p class="muted" style="margin-top:12px">自动同步：检测官方新版本后自动下载并用服务器上的 Node(≥22) 构建引擎 bundle、计算 sha256 并切换 latest.json。官方版本发现依次尝试 npmmirror 与 npmjs 两个 registry。此外访问 <span class="mono">latest.php</span> 或首页时，若镜像数据超过 6 小时未同步会在后台自动触发一次（无需 cron）。也可配置 cron 定时执行 <span class="mono">php sync.php</span> 或访问 <span class="mono">sync.php?token=&lt;sync_token&gt;</span>（在 mirror-config.php 中配置）。</p>
   </div>
 
   <div class="card">
@@ -385,6 +394,8 @@ td form .btn { margin-top:0; padding:4px 14px; font-size:12px; }
       <input type="text" name="feed_url" value="<?= h($feed['url'] ?? '') ?>">
       <label>更新说明</label>
       <input type="text" name="feed_notes" value="<?= h($feed['notes'] ?? '') ?>">
+      <label>安装包 sha256（可选，上传安装包时自动填写；客户端下载后校验）</label>
+      <input type="text" name="feed_sha256" value="<?= h($feed['sha256'] ?? '') ?>">
       <button type="submit">保存</button>
     </form>
   </div>

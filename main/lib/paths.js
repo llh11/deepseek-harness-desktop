@@ -18,6 +18,8 @@ const desktopDir = path.join(dshHome, 'dsh-desktop')
 const files = {
   dshSettings: path.join(dshHome, 'settings.yaml'),
   dshEnv: path.join(dshHome, '.env'),
+  /** Official credential store written by the official "模型" settings page. */
+  dshCredentials: path.join(dshHome, '.credentials.yaml'),
   desktopSettings: path.join(desktopDir, 'desktop-settings.json'),
   mcpStore: path.join(desktopDir, 'mcp-servers.json'),
   /** Overlay passed to `dsh web --patch` so MCP servers load without editing profile files. */

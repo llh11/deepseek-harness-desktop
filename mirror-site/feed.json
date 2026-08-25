@@ -1,5 +1,5 @@
 {
-  "version": "1.3.2",
-  "url": "dl.php?f=desktop/DeepSeek-Harness-Desktop-Setup-1.3.2.exe",
-  "notes": "DeepSeek Harness Desktop 1.3.2：修复用量与列表渲染、插件注解全量覆盖（含 Cordis 框架插件）、对话流增强稳定性修复。"
+    "version": "1.4.0",
+    "url": "dl.php?f=desktop/DeepSeek-Harness-Desktop-Setup-1.4.0.exe",
+    "notes": "1.4.0：模型与多模态管理全面回归官方「模型」板块（官方已原生支持多模态与 Anthropic 原生协议，旧配置自动迁移为官方直连路由）；修复账户余额误报未配置与官方用量读取失败；镜像站自动跟进官方最新引擎版本"
 }

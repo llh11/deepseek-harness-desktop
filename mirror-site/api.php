@@ -1,28 +1,61 @@
 <?php
-/** Chunked upload endpoint for the mirror admin (engine bundles & desktop
- * installers). Chunks are small POSTs that dodge PHP/WAF size limits; the
- * assemble step concatenates them into files/{kind}/ and updates manifests. */
-session_start();
+/**
+ * Remote release API for the mirror subsite (token-authenticated, no admin
+ * session needed). Mirrors the admin panel's core operations so releases can
+ * be published from CI or a build machine:
+ *
+ *   POST /api.php                (all actions)
+ *   Headers: X-Mirror-Token: <api_token from mirror-config.php>
+ *
+ *   action=status                 → current manifests + official latest
+ *   action=sync                   → run mirror_sync_official() now
+ *   action=chunk                  → upload one file chunk (multipart: kind,
+ *                                   upload_id, index, c)
+ *   action=assemble               → merge chunks into files/{kind}/ and update
+ *                                   the manifest (latest.json / feed.json)
+ *   action=set-feed               → overwrite feed.json fields (version, url,
+ *                                   notes, sha256)
+ */
 header('Content-Type: application/json; charset=utf-8');
-require dirname(__DIR__) . '/lib.php';
-$config = require dirname(__DIR__) . '/mirror-config.php';
+require __DIR__ . '/lib.php';
+$config = require __DIR__ . '/mirror-config.php';
 
 function out($code, $message, $data = []) {
     echo json_encode(['code' => $code, 'message' => $message, 'data' => $data], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-if (empty($_SESSION['dsh_mirror_admin'])) out(401, '未登录');
-$token = $_SERVER['HTTP_X_CSRF'] ?? ($_POST['csrf'] ?? '');
-if (!hash_equals($_SESSION['dsh_mirror_csrf'] ?? '', (string)$token)) out(403, 'CSRF 校验失败');
+$token = $_SERVER['HTTP_X_MIRROR_TOKEN'] ?? ($_POST['token'] ?? '');
+$expect = (string)($config['api_token'] ?? '');
+if ($expect === '' || !hash_equals($expect, (string)$token)) out(403, '未授权');
 
-$action = $_POST['action'] ?? '';
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
+
+if ($action === 'status') {
+    $discovered = mirror_official_latest($config);
+    out(0, 'ok', [
+        'latest' => read_manifest('latest.json'),
+        'feed' => read_manifest('feed.json'),
+        'engine_history' => array_slice(read_history('engine'), 0, 5),
+        'desktop_history' => array_slice(read_history('desktop'), 0, 5),
+        'official' => $discovered['ok'] ? $discovered['version'] : null,
+        'official_registry' => $discovered['registry'],
+    ]);
+}
+
+if ($action === 'sync') {
+    @set_time_limit(900);
+    $result = mirror_sync_official($config);
+    out($result['ok'] ? 0 : 1, $result['message'], [
+        'action' => $result['action'], 'version' => $result['version'], 'sha256' => $result['sha256'],
+    ]);
+}
+
 $kind = $_POST['kind'] ?? '';
 if (!in_array($kind, ['engine', 'desktop'], true)) out(400, 'kind 非法');
-
 $uploadId = preg_replace('/[^0-9A-Za-z_-]/', '', (string)($_POST['upload_id'] ?? ''));
 if ($uploadId === '') out(400, '缺少 upload_id');
-$tmpDir = ensure_files_dir() . '/state/tmp-' . $uploadId;
+$tmpDir = ensure_files_dir() . '/state/tmp-api-' . $uploadId;
 
 if ($action === 'chunk') {
     $index = (int)($_POST['index'] ?? -1);
@@ -57,7 +90,6 @@ if ($action === 'assemble') {
         fwrite($fp, (string)file_get_contents($part));
     }
     fclose($fp);
-    // cleanup chunks
     foreach (glob("$tmpDir/*.part") ?: [] as $p) @unlink($p);
     @rmdir($tmpDir);
 
@@ -83,6 +115,17 @@ if ($action === 'assemble') {
         upsert_history('desktop', ['version' => $version, 'url' => $url, 'size' => $size, 'sha256' => $sha, 'uploadedAt' => time(), 'notes' => $notes]);
     }
     out(0, 'ok', ['file' => $name, 'size' => $size, 'url' => $url, 'sha256' => $sha]);
+}
+
+if ($action === 'set-feed') {
+    $feedNow = read_manifest('feed.json') ?? [];
+    write_manifest('feed.json', [
+        'version' => trim((string)($_POST['version'] ?? ($feedNow['version'] ?? ''))),
+        'url' => trim((string)($_POST['url'] ?? ($feedNow['url'] ?? ''))),
+        'notes' => trim((string)($_POST['notes'] ?? ($feedNow['notes'] ?? ''))),
+        'sha256' => trim((string)($_POST['sha256'] ?? ($feedNow['sha256'] ?? ''))),
+    ]);
+    out(0, 'feed.json 已更新');
 }
 
 out(400, '未知 action');
