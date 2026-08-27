@@ -5,6 +5,7 @@
  * lifecycle in sync with the visual settings.
  */
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
+const fs = require('node:fs')
 const path = require('node:path')
 const settings = require('./lib/settings-store')
 const icons = require('./lib/icons')
@@ -13,11 +14,10 @@ const tray = require('./lib/tray')
 const skills = require('./lib/skill-manager')
 const mcp = require('./lib/mcp-manager')
 const balances = require('./lib/balances')
-const providerMigration = require('./lib/provider-migrate')
 const updater = require('./lib/updater')
 const plugins = require('./lib/plugin-explainer')
+const featuredPlugins = require('./lib/featured-plugins')
 const officialUsage = require('./lib/official-usage')
-const { callRpc } = require('./lib/service-rpc')
 const { ensureDesktopDir } = require('./lib/paths')
 
 // Windows 上窗口最小化/隐藏时，Chromium 会降级渲染进程并在内存压力下丢弃
@@ -45,7 +45,8 @@ function createMainWindow() {
     minHeight: 620,
     show: false,
     title: 'DeepSeek Harness',
-    icon: icons.windowIcon(),
+    // 打包后任务栏/窗口自动使用 exe 内置图标；不再等待 SVG 光栅化，
+    // 让首窗更早出现（托盘图标仍在 icons.init() 完成后创建）。
     // sandbox:false lets the preload require the injected desktop settings UI.
     // backgroundThrottling:false keeps the minimized/hidden window fully live.
     webPreferences: { preload: PRELOAD, sandbox: false, backgroundThrottling: false },
@@ -165,16 +166,31 @@ function registerIpc() {
   ipcMain.handle('mcp:test', (_event, id) => mcp.test(id))
 
   ipcMain.handle('plugins:catalog', () => plugins.catalog())
+  ipcMain.handle('plugins:featured', () => featuredPlugins.catalog())
+  ipcMain.handle('plugins:installFeatured', (_event, payload) => featuredPlugins.install(payload ?? {}, (line) => sendToWindows('updates:progress', line)))
 
   ipcMain.handle('balances:list', () => balances.balances())
   ipcMain.handle('official-usage:stats', () => officialUsage.stats())
-  ipcMain.handle('official:llmProviders', async () => {
-    try {
-      const value = await callRpc('llm.providers', {})
-      return { available: true, providers: value?.providers ?? [] }
-    } catch (error) {
-      return { available: false, error: error.message, providers: [] }
-    }
+
+  ipcMain.handle('dialog:pickImage', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+  // Background images live on disk while the page origin is http://127.0.0.1,
+  // so file:// URLs would be blocked; serve them to the renderer as data URLs.
+  ipcMain.handle('background:dataUrl', (_event, imagePath) => {
+    const resolved = path.resolve(String(imagePath ?? ''))
+    if (!fs.existsSync(resolved)) return null
+    const ext = path.extname(resolved).toLowerCase()
+    const mimes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp' }
+    const mime = mimes[ext]
+    if (!mime) return null
+    const buffer = fs.readFileSync(resolved)
+    if (buffer.length > 20 * 1024 * 1024) return null
+    return `data:${mime};base64,${buffer.toString('base64')}`
   })
 
   ipcMain.handle('updates:check', () => updater.checkAll())
@@ -200,24 +216,20 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     settings.load()
     ensureDesktopDir()
-    await icons.init()
 
-    // One-time carry-over from the removed 1.3.x desktop provider manager:
-    // legacy providers become direct official llm-pi-ai routes in settings.yaml.
-    try {
-      const migration = providerMigration.migrate()
-      if (migration.migrated > 0) {
-        console.log(`[desktop] 已迁移 ${migration.migrated} 个第三方 Provider 为官方直连路由：${migration.details.join('；')}`)
-      }
-    } catch (error) {
-      console.error('[desktop] Provider 迁移失败：', error)
-    }
+    // 启动提速：图标光栅化不再阻塞首窗（打包后窗口/任务栏直接用 exe 图标），
+    // 托盘在图标就绪后创建；服务在窗口创建的同时就提前拉起。
+    const iconsReady = icons.init().catch((error) => {
+      console.error('[desktop] 图标初始化失败：', error)
+    })
 
     service.events.on('status', onServiceStatus)
     skills.events.on('changed', () => sendToWindows('skills:changed', { at: Date.now() }))
     skills.watchRoots()
 
     createMainWindow()
+    registerIpc()
+    if (settings.get().autoStartService) service.start()
 
     // Smoke hook: open the OFFICIAL settings dialog and verify the desktop
     // rows were injected into its nav, then a desktop section renders.
@@ -273,29 +285,29 @@ if (!gotLock) {
       setTimeout(() => poll(Date.now() + 120_000), 15_000)
     }
 
-    tray.create({
-      showMain: showMainWindow,
-      openControl,
-      openBrowser: () => shell.openExternal(settings.get().origin),
-      serviceStart: () => service.start(),
-      serviceStop: () => service.stop(),
-      serviceRestart: () => service.restart(),
-      checkUpdates: () => {
-        updater.checkAll().then((result) => {
-          const { desktop, official } = result
-          const parts = []
-          if (desktop.updateAvailable) parts.push(`桌面版 ${desktop.latest} 可更新`)
-          else parts.push(`桌面版已是最新（${desktop.current}）`)
-          if (official.updateAvailable) parts.push(`官方 dsh ${official.installed} → ${official.latest} 可更新`)
-          else if (official.latest) parts.push(`官方 dsh ${official.installed ?? '未知'}（最新 ${official.latest}）`)
-          else parts.push(`官方 dsh 版本查询失败：${official.error ?? '未知错误'}`)
-          dialog.showMessageBox({ type: 'info', title: '检查更新', message: '更新检查完成', detail: parts.join('\n'), buttons: ['好的'] })
-        })
-      },
+    // 托盘依赖光栅化图标；图标就绪后立即挂载（不阻塞主流程）。
+    iconsReady.then(() => {
+      tray.create({
+        showMain: showMainWindow,
+        openControl,
+        openBrowser: () => shell.openExternal(settings.get().origin),
+        serviceStart: () => service.start(),
+        serviceStop: () => service.stop(),
+        serviceRestart: () => service.restart(),
+        checkUpdates: () => {
+          updater.checkAll().then((result) => {
+            const { desktop, official } = result
+            const parts = []
+            if (desktop.updateAvailable) parts.push(`桌面版 ${desktop.latest} 可更新`)
+            else parts.push(`桌面版已是最新（${desktop.current}）`)
+            if (official.updateAvailable) parts.push(`官方 dsh ${official.installed} → ${official.latest} 可更新`)
+            else if (official.latest) parts.push(`官方 dsh ${official.installed ?? '未知'}（最新 ${official.latest}）`)
+            else parts.push(`官方 dsh 版本查询失败：${official.error ?? '未知错误'}`)
+            dialog.showMessageBox({ type: 'info', title: '检查更新', message: '更新检查完成', detail: parts.join('\n'), buttons: ['好的'] })
+          })
+        },
+      })
     })
-
-    registerIpc()
-    if (settings.get().autoStartService) service.start()
 
     app.on('activate', () => showMainWindow())
   })

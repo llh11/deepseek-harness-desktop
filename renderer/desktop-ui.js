@@ -146,7 +146,7 @@ const SECTION_DEFS = [
   { id: 'desktop-service', label: '内置服务', icon: ICONS.settings },
   { id: 'desktop-usage', label: '账户与用量', icon: ICONS.usage },
   { id: 'desktop-skills', label: 'Skill 加载器', icon: ICONS.skill },
-  { id: 'desktop-mcp', label: 'MCP 插件', icon: ICONS.plugins },
+  { id: 'desktop-mcp', label: '插件与 MCP', icon: ICONS.plugins },
   { id: 'desktop-update', label: '更新与关于', icon: ICONS.download },
 ]
 
@@ -198,6 +198,41 @@ function init(ipcRenderer) {
   // （条件节点列表的常见坑），这里统一过滤后再调用。
   const setChildren = (host, ...kids) => {
     host.replaceChildren(...kids.flat().filter((k) => k instanceof Node))
+  }
+
+  /* ---------- chat wallpaper ---------- */
+  let bgCache = { path: null, dataUrl: null }
+  async function applyBackground() {
+    try {
+      const settings = await call('settings:get')
+      document.getElementById('__dshbg')?.remove()
+      if (!settings.backgroundEnabled || !settings.backgroundImage) return
+      let dataUrl = bgCache.path === settings.backgroundImage ? bgCache.dataUrl : null
+      if (!dataUrl) {
+        dataUrl = await call('background:dataUrl', settings.backgroundImage)
+        if (!dataUrl) return
+        bgCache = { path: settings.backgroundImage, dataUrl }
+      }
+      const layer = document.createElement('div')
+      layer.id = '__dshbg'
+      layer.style.cssText = 'position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden'
+      const img = document.createElement('img')
+      img.alt = ''
+      img.src = dataUrl
+      img.style.cssText = `width:100%;height:100%;object-fit:cover;filter:blur(${Number(settings.backgroundBlur) || 0}px)`
+      const mask = document.createElement('div')
+      const dim = Math.min(100, Math.max(0, Number(settings.backgroundDim ?? 55))) / 100
+      mask.style.cssText = `position:absolute;inset:0;background:#000;opacity:${dim}`
+      layer.append(img, mask)
+      document.documentElement.appendChild(layer)
+      // 官方内容浮于壁纸上；body/#root 透明以露出背景层。
+      for (const selector of ['body', '#root']) {
+        const node = document.querySelector(selector)
+        if (node) node.style.background = 'transparent'
+      }
+      const rootEl = document.getElementById('root')
+      if (rootEl) { rootEl.style.position = 'relative'; rootEl.style.zIndex = '1' }
+    } catch { /* wallpaper is cosmetic; never break the page */ }
   }
   const field = (labelText, control) => el('div', { class: 'dshdx-field' }, el('span', { class: 'dshdx-fieldlabel', text: labelText }), control)
   const input = (attrs = {}) => el('input', { class: 'dshdx-input', ...attrs })
@@ -461,6 +496,41 @@ function init(ipcRenderer) {
     originInput.addEventListener('change', async () => { await safely('settings:set', { origin: originInput.value.trim() }); toast('设置已保存') })
     workspaceInput.addEventListener('change', async () => { await safely('settings:set', { workspacePath: workspaceInput.value.trim() }); toast('设置已保存') })
 
+    /* 外观：对话背景壁纸（即时预览，写入桌面设置）。 */
+    const bgPathInput = input({ type: 'text', placeholder: '壁纸图片路径（png/jpg/webp，≤20MB）' })
+    const bgPick = btn('选择图片…', 'secondary', async () => {
+      const file = await safely('dialog:pickImage')
+      if (file) { bgPathInput.value = file; bgPathInput.dispatchEvent(new Event('change')) }
+    }, true)
+    const bgSwitch = switchRow('启用对话背景壁纸', false, async (checked) => {
+      await safely('settings:set', { backgroundEnabled: checked })
+      toast(checked ? '背景已启用' : '背景已关闭')
+      applyBackground()
+    })
+    const bgBlur = el('input', { type: 'range', min: '0', max: '30', class: 'dshdx-input' })
+    const bgDim = el('input', { type: 'range', min: '0', max: '95', class: 'dshdx-input' })
+    const bgBlurLabel = el('span', { class: 'dshdx-caption', text: '' })
+    const bgDimLabel = el('span', { class: 'dshdx-caption', text: '' })
+    const paintRangeLabels = (settings) => {
+      bgBlurLabel.textContent = `模糊 ${settings.backgroundBlur ?? 0}px`
+      bgDimLabel.textContent = `遮罩不透明度 ${settings.backgroundDim ?? 55}%（越高文字越清晰）`
+    }
+    call('settings:get').then((settings) => {
+      bgPathInput.value = settings.backgroundImage ?? ''
+      bgSwitch.querySelector('input').checked = Boolean(settings.backgroundEnabled)
+      bgBlur.value = String(settings.backgroundBlur ?? 0)
+      bgDim.value = String(settings.backgroundDim ?? 55)
+      paintRangeLabels(settings)
+    }).catch(() => {})
+    const saveBg = async (patch) => {
+      const after = await safely('settings:set', patch)
+      paintRangeLabels(after)
+      applyBackground()
+    }
+    bgPathInput.addEventListener('change', async () => { await saveBg({ backgroundImage: bgPathInput.value.trim() }); toast('壁纸已保存') })
+    bgBlur.addEventListener('change', () => saveBg({ backgroundBlur: Number(bgBlur.value) }))
+    bgDim.addEventListener('change', () => saveBg({ backgroundDim: Number(bgDim.value) }))
+
     root.replaceChildren(
       el('h3', { class: 'dshdx-title', text: '内置服务' }),
       el('p', { class: 'dshdx-intro', text: '桌面应用自动启动并管理本地 DeepSeek Harness 服务；已在运行的服务会被直接唤醒复用。' }),
@@ -485,6 +555,20 @@ function init(ipcRenderer) {
       el('div', { class: 'dshdx-card' },
         el('span', { class: 'dshdx-cardtitle', text: '行为开关' }),
         switches.autoStartService, switches.stopServiceOnQuit, switches.closeToTray, switches.launchOnLogin,
+      ),
+      el('div', { class: 'dshdx-card' },
+        el('span', { class: 'dshdx-cardtitle', text: '外观（背景壁纸）' }),
+        bgSwitch,
+        field('壁纸图片', el('div', { class: 'dshdx-inputrow' }, bgPathInput, bgPick)),
+        el('div', { class: 'dshdx-field' },
+          el('span', { class: 'dshdx-fieldlabel' }, '模糊强度　', bgBlurLabel),
+          bgBlur,
+        ),
+        el('div', { class: 'dshdx-field' },
+          el('span', { class: 'dshdx-fieldlabel' }, '可读性　', bgDimLabel),
+          bgDim,
+        ),
+        el('p', { class: 'dshdx-caption', text: '壁纸铺满对话窗口并即时预览；建议搭配官方暗色主题。若觉得文字不够清晰，调高遮罩不透明度即可。' }),
       ),
     )
     return root
@@ -729,14 +813,56 @@ function init(ipcRenderer) {
     }
     call('mcp:state').then(paint).catch(() => {})
 
+    /* 精选社区插件：原生融合 GitHub 热门 DSH 插件（经官方 profile 机制挂载）。
+     * 已刻意排除与官方底座/桌面端重复的候选（桌面启动器、Skill 中心、
+     * 图像理解等），避免功能冗余。 */
+    const featuredHost = el('div', { class: 'dshdx-stack' })
+    const paintFeatured = (items) => {
+      setChildren(featuredHost,
+        ...(items.length === 0
+          ? [el('p', { class: 'dshdx-caption', text: '暂无精选插件。' })]
+          : items.map((item) => {
+              const installButton = btn('一键安装', 'primary', async () => {
+                installButton.disabled = true
+                installButton.textContent = '安装中…'
+                try {
+                  const result = await safely('plugins:installFeatured', { id: item.id })
+                  toast(result.message ?? '安装完成')
+                  paintFeatured(await safely('plugins:featured'))
+                  if (window.confirm(`${item.name} 安装完成，是否立即重启服务以启用？`)) {
+                    await safely('service:restart').catch(() => {})
+                  }
+                } catch { safely('plugins:featured').then(paintFeatured).catch(() => {}) }
+              }, true)
+              return el('div', { class: 'dshdx-card' },
+                el('div', { class: 'dshdx-cardhead' },
+                  el('span', { class: 'dshdx-cardtitle', text: item.name }),
+                  tag(`★ ${item.stars}`),
+                  item.installed ? tag('已安装', 'dshdx-tag-ok') : null,
+                  el('span', { class: 'dshdx-cardactions' },
+                    item.installed ? null : installButton,
+                    btn('仓库', 'secondary', () => call('shell:openExternal', item.url), true),
+                  ),
+                ),
+                el('p', { class: 'dshdx-caption', text: item.summary }),
+              )
+            })))
+    }
+    call('plugins:featured').then(paintFeatured).catch(() => {})
+
     root.replaceChildren(
-      el('h3', { class: 'dshdx-title', text: 'MCP 插件' }),
+      el('h3', { class: 'dshdx-title', text: '插件与 MCP' }),
       el('p', { class: 'dshdx-intro', text: '官方目前没有 MCP 可视化配置界面，本面板是其补充：通过官方 @deepseek-ai/dsh-mcp-client 插件接入外部 MCP 服务器，配置写入注入层并以 --patch 参数启动服务，不改动任何官方 profile 文件，与官方插件清单一栏互不影响。保存后需重启服务生效。' }),
       listHost,
       editorHost,
       el('div', { class: 'dshdx-cardactions' },
         btn('添加 MCP 服务器', 'primary', () => editorHost.replaceChildren(buildMcpEditor(null, paint, editorHost))),
         btn('重启服务以应用', 'secondary', () => { toast('正在重启服务以应用 MCP 注入层…'); safely('service:restart').catch(() => {}) }),
+      ),
+      el('div', { class: 'dshdx-card' },
+        el('span', { class: 'dshdx-cardtitle', text: '精选社区插件（原生融合）' }),
+        el('p', { class: 'dshdx-caption', text: '来自 GitHub DSH 生态中口碑与热度最高的项目，经官方 profile 机制挂载（随包 npm 安装，无需 pnpm），装完即融入官方「插件」体系。与官方底座或桌面端重复的候选已被排除。' }),
+        featuredHost,
       ),
     )
     return root
@@ -1108,6 +1234,8 @@ function init(ipcRenderer) {
   call('service:versions').then((versions) => {
     serviceVersionsText = versions.sources.map((item) => `${item.label}${item.version ? `（${item.version}）` : ''}`).join('　')
   }).catch(() => {})
+
+  applyBackground()
 }
 
 module.exports = { init }

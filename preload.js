@@ -8,12 +8,12 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 const INVOKE_CHANNELS = new Set([
-  'app:info', 'settings:get', 'settings:set', 'dialog:pickFolder',
+  'app:info', 'settings:get', 'settings:set', 'dialog:pickFolder', 'dialog:pickImage', 'background:dataUrl',
   'service:status', 'service:start', 'service:stop', 'service:restart', 'service:logs', 'service:versions',
   'skills:list', 'skills:listMerged', 'skills:install', 'skills:installPaths', 'skills:searchGitHub', 'skills:remove', 'skills:toggle', 'skills:refresh',
   'mcp:state', 'mcp:save', 'mcp:remove', 'mcp:toggle', 'mcp:apply', 'mcp:test',
-  'plugins:catalog',
-  'balances:list', 'official-usage:stats', 'official:llmProviders',
+  'plugins:catalog', 'plugins:featured', 'plugins:installFeatured',
+  'balances:list', 'official-usage:stats',
   'updates:check', 'updates:applyOfficial', 'updates:downloadDesktop',
   'shell:openExternal', 'shell:openPath', 'ui:openControl', 'ui:openMain',
 ])

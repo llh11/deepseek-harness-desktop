@@ -26,6 +26,14 @@ const DEFAULTS = {
   updateFeedUrl: 'http://199.7.140.33:8010/feed.json',
   /** Optional engine mirror base URL (加速更新镜像子站); serves latest.json + pre-built engine bundles. */
   engineMirrorUrl: 'http://199.7.140.33:8010',
+  /** Chat background wallpaper (absolute path); empty = feature off. */
+  backgroundImage: '',
+  /** Show the wallpaper layer behind the official UI. */
+  backgroundEnabled: false,
+  /** Wallpaper blur in px. */
+  backgroundBlur: 0,
+  /** Dark mask opacity over the wallpaper, 0-100 (readability). */
+  backgroundDim: 55,
   lastUpdateCheck: null,
 }
 

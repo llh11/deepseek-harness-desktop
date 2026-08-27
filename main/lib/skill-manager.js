@@ -309,7 +309,8 @@ function remove(skillPath) {
 async function searchGitHub({ query }) {
   const keyword = String(query ?? '').trim()
   const clauses = keyword === '' ? ['SKILL.md'] : [`${keyword} SKILL.md`]
-  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(clauses[0])}&sort=updated&order=desc&per_page=20`
+  // Server-side star ranking: the hottest matches first.
+  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(clauses[0])}&sort=stars&order=desc&per_page=20`
   const response = await fetch(url, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'dsh-desktop' },
     signal: AbortSignal.timeout(15_000),
