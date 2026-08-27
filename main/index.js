@@ -20,6 +20,13 @@ const officialUsage = require('./lib/official-usage')
 const { callRpc } = require('./lib/service-rpc')
 const { ensureDesktopDir } = require('./lib/paths')
 
+// Windows 上窗口最小化/隐藏时，Chromium 会降级渲染进程并在内存压力下丢弃
+// 页面（tab discard），从托盘/任务栏恢复窗口时就会整页重新加载。以下开关
+// 禁用后台降级与遮挡判定，保证本地 Web UI 始终驻留内存。
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+
 let mainWindow = null
 let quitting = false
 let originLoaded = false
@@ -40,11 +47,21 @@ function createMainWindow() {
     title: 'DeepSeek Harness',
     icon: icons.windowIcon(),
     // sandbox:false lets the preload require the injected desktop settings UI.
-    webPreferences: { preload: PRELOAD, sandbox: false },
+    // backgroundThrottling:false keeps the minimized/hidden window fully live.
+    webPreferences: { preload: PRELOAD, sandbox: false, backgroundThrottling: false },
   })
   mainWindow.removeMenu()
+  // 新窗口从 loading 页开始；originLoaded 标志必须随窗口重置，否则窗口
+  // 重建后跳转被旧标志挡住，页面永远停留在 loading（状态却显示运行中）。
+  originLoaded = false
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'loading.html'))
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow?.show()
+    // 窗口（重新）创建时服务若已就绪，直接进入官方 UI：此时不会再有新的
+    // service:status 事件来驱动跳转。
+    const { status } = service.describe()
+    if (status === 'running-managed' || status === 'running-external') ensureOriginLoaded()
+  })
   mainWindow.on('close', (event) => {
     if (!quitting && settings.get().closeToTray) {
       event.preventDefault()
@@ -52,6 +69,18 @@ function createMainWindow() {
     }
   })
   mainWindow.on('closed', () => { mainWindow = null })
+  // 兜底：渲染进程被系统回收时恢复页面而不是停在白屏/加载页。
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (quitting || !mainWindow || mainWindow.isDestroyed()) return
+    const url = mainWindow.webContents.getURL()
+    console.error('[desktop] 渲染进程退出（%s），正在恢复页面…', details.reason)
+    if (url.startsWith('http')) {
+      mainWindow.webContents.reloadIgnoringCache().catch(() => {})
+    } else {
+      originLoaded = false
+      ensureOriginLoaded()
+    }
+  })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }

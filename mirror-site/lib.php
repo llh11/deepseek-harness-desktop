@@ -154,7 +154,7 @@ function mirror_sync_official($config) {
     $registry = $discovered['registry'];
     $current = read_manifest('latest.json') ?? [];
     if (($current['version'] ?? '') === $latest && !empty($current['bundle']) && empty($current['pendingBuild'])) {
-        return ['ok' => true, 'action' => 'none', 'version' => $latest, 'message' => "镜像已是最新（$latest）", 'sha256' => $current['sha256'] ?? null];
+        return ['ok' => true, 'action' => 'none', 'version' => $latest, 'message' => "镜像已是最新（{$latest}）", 'sha256' => $current['sha256'] ?? null];
     }
 
     $notes = "DeepSeek Harness 官方引擎 $latest 预构建镜像（含完整依赖树，免 npm 官方源下载）";
@@ -215,7 +215,7 @@ function mirror_sync_official($config) {
         'sha256' => $sha, 'size' => $size, 'syncedAt' => date('c'),
     ]);
     upsert_history('engine', ['version' => $latest, 'url' => $url, 'size' => $size, 'sha256' => $sha, 'uploadedAt' => time(), 'notes' => $notes, 'source' => 'auto-sync']);
-    return ['ok' => true, 'action' => 'built', 'version' => $latest, 'message' => "已自动构建并切换镜像：$latest（" . fmt_size($size) . "）", 'sha256' => $sha];
+    return ['ok' => true, 'action' => 'built', 'version' => $latest, 'message' => "已自动构建并切换镜像：{$latest}（" . fmt_size($size) . "）", 'sha256' => $sha];
 }
 
 /**

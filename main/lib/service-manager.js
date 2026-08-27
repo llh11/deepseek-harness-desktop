@@ -137,12 +137,18 @@ function resolveCandidates() {
   const mode = settings.get().serviceMode
   const list = []
 
-  // One-click updates install here (user-writable); prefer over the bundled copy.
+  // Local engine installs: the one-click update dir (user-writable) and the
+  // copy bundled with the installer. The NEWER version must win — stale
+  // leftovers from an old one-click update must never shadow a newer bundled
+  // engine (ties keep the updated copy, so a same-version local update still
+  // takes precedence).
+  const local = []
+
   const updatedPkgDir = path.join(desktopDir, 'dsh-service', 'node_modules', '@deepseek-ai', 'dsh')
   const updatedBin = path.join(updatedPkgDir, 'lib', 'bin.js')
   if (fs.existsSync(updatedBin)) {
     const node = runtime.nodeExe()
-    list.push({
+    local.push({
       kind: 'updated', label: `官方服务（本地更新版${readVersion(updatedPkgDir) ? ` ${readVersion(updatedPkgDir)}` : ''}）`,
       run: { command: node ?? 'node', args: [updatedBin, ...webArgs(), ...noOpenArgs(readVersion(updatedPkgDir))], env: {} },
       version: readVersion(updatedPkgDir),
@@ -156,8 +162,8 @@ function resolveCandidates() {
       // Prefer the bundled standalone Node runtime: dsh requires Node >=22.19
       // (node:zlib zstd exports), which Electron's embedded Node may not provide.
       const node = runtime.nodeExe()
-      list.push({
-        kind: 'bundled', label: node ? '内置服务（随包 Node 运行时）' : '内置服务（Electron Node，兼容模式）',
+      local.push({
+        kind: 'bundled', label: node ? `内置服务（随包 Node 运行时${readVersion(pkgDir) ? ` ${readVersion(pkgDir)}` : ''}）` : '内置服务（Electron Node，兼容模式）',
         run: {
           command: node ?? process.execPath,
           args: [bin, ...webArgs(), ...noOpenArgs(readVersion(pkgDir))],
@@ -167,6 +173,14 @@ function resolveCandidates() {
       })
     }
   }
+
+  local.sort((a, b) => {
+    if (a.version && b.version) return compareVersions(b.version, a.version)
+    if (a.version) return -1
+    if (b.version) return 1
+    return 0 // stable sort keeps the updated copy first
+  })
+  list.push(...local)
 
   const repo = settings.get().sourceRepoPath.trim() !== '' ? path.resolve(settings.get().sourceRepoPath) : autoDetectRepo()
   if (repo && fs.existsSync(path.join(repo, 'apps', 'cli', 'package.json'))) {
@@ -208,6 +222,19 @@ function spawnCandidate(candidate) {
   const proc = spawn(candidate.run.command, candidate.run.args, { cwd, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   proc.stdout.on('data', (chunk) => { for (const line of chunk.toString().split(/\r?\n/)) if (line.trim() !== '') pushLog(line) })
   proc.stderr.on('data', (chunk) => { for (const line of chunk.toString().split(/\r?\n/)) if (line.trim() !== '') pushLog(`[stderr] ${line}`) })
+  // 进程退出（崩溃/被外部杀掉）必须同步状态：否则托盘与设置页永远停留在
+  // “服务运行中”，用户点「重试启动」也会被 start() 的运行中短路直接忽略。
+  proc.on('exit', (code, signal) => {
+    if (child !== proc) return // 已被 stop()/start() 接管，状态由它们收尾
+    child = null
+    state.pid = null
+    if (state.status === 'stopping') return
+    state.status = 'error'
+    state.detail = `服务进程已退出（${signal ?? `退出码 ${code ?? '?'}`}），请尝试重新启动。`
+    state.lastError = state.detail
+    pushLog(`[desktop] ${state.detail}`)
+    emit()
+  })
   return proc
 }
 
@@ -231,8 +258,22 @@ async function waitReady(origin, timeoutMs, proc) {
 
 /** Probe → wake an existing service, else spawn the first candidate that becomes ready. */
 async function start() {
-  if (['starting', 'running-managed', 'running-external', 'stopping'].includes(state.status)) return describe()
+  if (['starting', 'stopping'].includes(state.status)) return describe()
   const { origin } = settings.get()
+
+  // 宣称“运行中”时先验证：进程可能早已退出（状态未同步）、或端口不再响应。
+  // 确实在运行 -> 直接返回；否则复位状态并重新走启动流程，保证「重试启动」
+  // 永远能把死掉的服务拉起来，而不是被短路忽略。
+  if (state.status === 'running-managed' || state.status === 'running-external') {
+    const procAlive = state.status !== 'running-managed' || (child && child.exitCode === null)
+    if (procAlive && await probe(origin)) return describe()
+    pushLog('[desktop] 状态为运行中但服务无响应，重新启动服务')
+    if (child) { killTree(child.pid ?? 0); child = null }
+    state.pid = null
+    state.status = 'stopped'
+    state.detail = '检测到服务已停止，正在重新启动…'
+  }
+
   state.status = 'starting'
   state.detail = '正在探测本地服务…'
   state.lastError = null

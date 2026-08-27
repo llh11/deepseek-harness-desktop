@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop",
   "productName": "DeepSeek Harness Desktop",
-  "version": "1.4.0",
+  "version": "1.4.4",
   "description": "把官方 DeepSeek Harness 的本地 Web UI 带到原生桌面。应用自动启动和管理本地 Harness 服务，集成系统托盘与桌面窗口，无需安装 Node.js 或执行命令。",
   "author": "DeepSeek Harness Desktop",
   "license": "MIT",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "gen:icons": "electron scripts/gen-icons.js",
-    "dist": "electron-builder --win nsis --x64"
+    "dist": "node scripts/sync-engine.js && electron-builder --win nsis --x64"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"
@@ -22,7 +22,7 @@
     "appId": "ai.deepseek.dsh.desktop",
     "productName": "DeepSeek Harness Desktop",
     "directories": {
-      "output": "release-1_4_0"
+      "output": "release-1_4_4"
     },
     "files": [
       "main/**",

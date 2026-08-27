@@ -10,9 +10,11 @@
 const fs = require('node:fs')
 const { files } = require('./paths')
 
-/** Parse the refs mapping of $DSH_HOME/.credentials.yaml without js-yaml:
- * the document is a flat `refs: { NAME: value }` block (records hold richer
- * structures, but the desktop never needs them). Returns {} when absent. */
+/** Parse credential references out of $DSH_HOME/.credentials.yaml without
+ * js-yaml. The official Models page actually writes TOP-LEVEL flat keys
+ * (DEEPSEEK_API_KEY: ...), while the older documented layout nests them under
+ * `refs:`; records hold richer structures the desktop never needs. Both
+ * layouts are accepted, top-level first. Returns {} when absent. */
 function readCredentialRefs() {
   let text
   try {
@@ -26,9 +28,12 @@ function readCredentialRefs() {
     const line = rawLine.replace(/\r$/, '')
     if (/^\s*#/.test(line) || line.trim() === '') continue
     if (/^refs:\s*$/.test(line)) { inRefs = true; continue }
-    if (/^[A-Za-z_]/.test(line)) inRefs = false // a new top-level key ended the refs block
-    if (!inRefs) continue
-    const match = line.match(/^\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.+?)\s*$/)
+    if (inRefs && /^[A-Za-z_]/.test(line)) inRefs = false // a new top-level key ended the refs block
+    const isTopLevel = !inRefs && /^[A-Za-z_][A-Za-z0-9_]*:/.test(line)
+    if (!inRefs && !isTopLevel) continue
+    // Top-level keys sit at column 0 (no leading whitespace).
+    if (!inRefs && !/^[A-Za-z_]/.test(line)) continue
+    const match = line.match(inRefs ? /^\s+([A-Za-z_][A-Za-z0-9_]*):\s*(.+?)\s*$/ : /^([A-Za-z_][A-Za-z0-9_]*):\s*(.+?)\s*$/)
     if (!match) continue
     let value = match[2]
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {

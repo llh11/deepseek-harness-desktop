@@ -194,6 +194,11 @@ function init(ipcRenderer) {
     return node
   }
   const btn = (label, kind, onClick, small) => el('button', { type: 'button', class: `dshdx-btn ${kind ? `dshdx-btn-${kind}` : ''} ${small ? 'dshdx-btn-sm' : ''}`, text: label, onclick: onClick })
+  // DOM 的 replaceChildren() 会把 null 参数转成字符串 "null" 渲染出来
+  // （条件节点列表的常见坑），这里统一过滤后再调用。
+  const setChildren = (host, ...kids) => {
+    host.replaceChildren(...kids.flat().filter((k) => k instanceof Node))
+  }
   const field = (labelText, control) => el('div', { class: 'dshdx-field' }, el('span', { class: 'dshdx-fieldlabel', text: labelText }), control)
   const input = (attrs = {}) => el('input', { class: 'dshdx-input', ...attrs })
   const switchRow = (labelText, checked, onChange) => {
@@ -394,7 +399,7 @@ function init(ipcRenderer) {
     const paint = (status) => {
       statusNow = status
       const [label, dotKind] = STATUS_META[status.status] ?? [status.status, '']
-      statusCard.replaceChildren(
+      setChildren(statusCard,
         el('div', { class: 'dshdx-rowline' }, el('span', { class: `dshdx-dot ${dotKind ? `dshdx-dot-${dotKind}` : ''}` }), el('span', { class: 'dshdx-cardtitle', text: `内置服务：${label}` })),
         el('p', { class: 'dshdx-sub', text: status.detail || '' }),
         el('p', { class: 'dshdx-caption', text: `来源：${status.source ?? '—'}　PID：${status.pid ?? '—'}　启动时间：${status.startedAt ? new Date(status.startedAt).toLocaleString() : '—'}` }),
@@ -980,7 +985,7 @@ function init(ipcRenderer) {
       const official = result.official
       const mirror = result.mirror
       const mirrorDegraded = Boolean(mirror?.error) || Boolean(mirror?.activeUrl && mirror?.url && mirror.activeUrl !== mirror.url)
-      officialBody.replaceChildren(
+      setChildren(officialBody,
         el('div', { class: 'dshdx-rowline' },
           el('span', { text: `本地引擎：${official.installed ?? '未知'}　npm 最新：${official.latest ?? '获取失败'}` }),
           official.updateAvailable ? tag('有更新', 'dshdx-tag-err') : official.latest ? tag('已是最新', 'dshdx-tag-ok') : null,
@@ -1007,7 +1012,7 @@ function init(ipcRenderer) {
         }
       }, true)
       const desktopDegraded = Boolean(desktop.error) || Boolean(desktop.source && !desktop.source.includes('199.7.140.33'))
-      desktopBody.replaceChildren(
+      setChildren(desktopBody,
         el('div', { class: 'dshdx-rowline' },
           el('span', { text: `当前版本：${desktop.current}${desktop.latest ? `　最新版本：${desktop.latest}` : ''}` }),
           desktop.updateAvailable ? tag('有更新', 'dshdx-tag-err') : desktop.latest ? tag('已是最新', 'dshdx-tag-ok') : null,
