@@ -12,6 +12,7 @@ const path = require('node:path')
 const { app } = require('electron')
 const settings = require('./settings-store')
 const runtime = require('./runtime')
+const featuredPlugins = require('./featured-plugins')
 const { desktopDir, files } = require('./paths')
 const { compareVersions } = require('./version')
 
@@ -38,11 +39,14 @@ function describe() {
   return { ...state, logsTail: ring.slice(-40) }
 }
 
-/** True when any HTTP response comes back from the origin. */
+/** True when the origin answers with a non-server-error status. 5xx means
+ * the socket is listening but the app is still warming up (plugin pipeline,
+ * profile mount) — treating it as ready races the first page load and causes
+ * sporadic "Failed to load plugins" banners. */
 async function probe(origin, timeoutMs = 1500) {
   try {
     const response = await fetch(origin, { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
-    return response.status > 0
+    return response.status > 0 && response.status < 500
   } catch {
     return false
   }
@@ -248,10 +252,18 @@ function killTree(pid) {
 
 async function waitReady(origin, timeoutMs, proc) {
   const startedAt = Date.now()
+  let consecutive = 0
   while (Date.now() - startedAt < timeoutMs) {
     if (proc.exitCode !== null) return false
-    if (await probe(origin, 1200)) return true
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Require TWO consecutive healthy probes before declaring readiness: a
+    // single early 200 can precede full plugin-pipeline warm-up.
+    if (await probe(origin, 1200)) {
+      consecutive += 1
+      if (consecutive >= 2) return true
+    } else {
+      consecutive = 0
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
   }
   return false
 }
@@ -320,11 +332,43 @@ async function start() {
     pushLog(`[desktop] ${candidate.label} 启动失败${proc.exitCode !== null ? `（退出码 ${proc.exitCode}）` : '（超时）'}`)
   }
 
+  // 自愈：引擎因 web profile 的 bundle 断链起不来（插件安装不完整/被市场
+  // 管线跳过）时，从日志提取缺失包名并自动补装一次，然后重跑启动流程。
+  if (!startRepairing) {
+    const missing = extractMissingProfilePackages()
+    if (missing.length > 0) {
+      startRepairing = true
+      try {
+        state.detail = `检测到插件依赖缺失（${missing.join('、')}），正在自动补装…`
+        state.status = 'starting'
+        emit()
+        pushLog(`[desktop] 自动补装 web profile 缺失依赖：${missing.join('、')}`)
+        const repaired = await featuredPlugins.installPackagesIntoProfile(missing, (line) => pushLog(line))
+        if (repaired) return start()
+      } finally {
+        startRepairing = false
+      }
+    }
+  }
+
   state.status = 'error'
   state.detail = '所有服务来源均启动失败，请查看日志排查。'
   state.lastError = state.detail
   emit()
   return describe()
+}
+
+let startRepairing = false
+/** Packages the engine reported missing from the web profile
+ * (ERR_MODULE_NOT_FOUND → "Cannot find package 'x' imported from …profiles\web"). */
+function extractMissingProfilePackages() {
+  const missing = new Set()
+  const re = /Cannot find package '([^']+)' imported from [^\n]*profiles[/\\]web/
+  for (const line of ring) {
+    const match = line.match(re)
+    if (match) missing.add(match[1])
+  }
+  return [...missing]
 }
 
 /** Stop the managed child only; an external service stays untouched. */

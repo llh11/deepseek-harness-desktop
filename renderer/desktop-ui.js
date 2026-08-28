@@ -1236,6 +1236,24 @@ function init(ipcRenderer) {
   }).catch(() => {})
 
   applyBackground()
+
+  // 兜底：官方 UI 启动竞态下 client-modules 偶发加载失败，页面出现
+  // "Failed to load plugins" 横幅。自动整页刷新一次（sessionStorage 防循环），
+  // 刷新后 bundle 缓存已热，插件即可正常挂载。
+  try {
+    if (location.href.startsWith('http')) {
+      const reloadKey = 'dshdx-plugin-fail-reload'
+      const failObserver = new MutationObserver(() => {
+        if (!document.body?.textContent?.includes('Failed to load plugins')) return
+        if (sessionStorage.getItem(reloadKey)) { failObserver.disconnect(); return }
+        sessionStorage.setItem(reloadKey, String(Date.now()))
+        failObserver.disconnect()
+        setTimeout(() => location.reload(), 400)
+      })
+      failObserver.observe(document.documentElement, { childList: true, subtree: true })
+      setTimeout(() => failObserver.disconnect(), 30000)
+    }
+  } catch { /* best effort */ }
 }
 
 module.exports = { init }

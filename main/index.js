@@ -110,7 +110,11 @@ function ensureOriginLoaded() {
   if (!mainWindow || originLoaded) return
   const { origin } = settings.get()
   originLoaded = true
-  mainWindow.loadURL(origin).catch(() => { originLoaded = false })
+  // 服务 listen 后插件管线（profile 挂载、bundle 生成）仍需短暂预热；
+  // 立即进入官方 UI 会偶发 "Failed to load plugins"。宽限一拍再加载。
+  setTimeout(() => {
+    mainWindow?.loadURL(origin).catch(() => { originLoaded = false })
+  }, 600)
 }
 
 function onServiceStatus(status) {

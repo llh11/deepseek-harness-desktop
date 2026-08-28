@@ -71,9 +71,14 @@ function isInstalled(packageName) {
   }
 }
 
-/** Run one bundled-npm install inside the profile dir, streaming progress. */
-function npmInstall(packageName, send) {
+/** Run one bundled-npm install inside the profile dir, streaming progress.
+ * --legacy-peer-deps is mandatory for the community plugin ecosystem: peer
+ * ranges against @deepseek-ai/* frequently trail the installed engine
+ * (e.g. ^0.1.0-rc.8 vs 0.1.1-rc.2) and strict npm would ERESOLVE-fail the
+ * whole install over harmless engine-version drift. */
+function npmInstall(packages, send) {
   return new Promise((resolve, reject) => {
+    const list = Array.isArray(packages) ? packages : [packages]
     const node = runtime.nodeExe()
     const npmCli = runtime.npmCli()
     if (!node || !npmCli) {
@@ -81,7 +86,7 @@ function npmInstall(packageName, send) {
       return
     }
     const dir = ensureProfile()
-    const proc = spawn(node, [npmCli, 'install', '--prefix', dir, '--registry', 'https://registry.npmmirror.com', '--no-audit', '--no-fund', '--loglevel', 'error', `${packageName}@latest`], {
+    const proc = spawn(node, [npmCli, 'install', '--prefix', dir, '--legacy-peer-deps', '--registry', 'https://registry.npmmirror.com', '--no-audit', '--no-fund', '--loglevel', 'error', ...list.map((name) => `${name}@latest`)], {
       cwd: dir,
       env: { ...process.env, PATH: `${path.dirname(node)}${path.delimiter}${process.env.PATH ?? ''}` },
       windowsHide: true,
@@ -109,6 +114,20 @@ function catalog() {
   return FEATURED.map((item) => ({ ...item, installed: isInstalled(item.package) }))
 }
 
+/** Best-effort repair: install arbitrary packages into the web profile
+ * (used by the service manager to heal profile bundles broken by a failed
+ * or partial plugin install). @returns {Promise<boolean>} success. */
+async function installPackagesIntoProfile(packages, send = () => {}) {
+  if (!Array.isArray(packages) || packages.length === 0) return false
+  try {
+    ensureProfile()
+    await npmInstall(packages, (line) => send(line))
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Install one featured plugin: npm install into the web profile, register
  * the bundle, verify the package landed. Restart the service to mount it.
@@ -131,4 +150,4 @@ async function install({ id }, send = () => {}) {
   return { ok: true, message: '安装完成，重启服务后生效' }
 }
 
-module.exports = { catalog, install, FEATURED }
+module.exports = { catalog, install, installPackagesIntoProfile, FEATURED }
