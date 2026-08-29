@@ -268,10 +268,40 @@ async function waitReady(origin, timeoutMs, proc) {
   return false
 }
 
+/** A zombie listener (an orphan service left behind when a previous desktop
+ * session crashed or was force-killed) holds the origin port but never
+ * answers: every spawned candidate then fails to bind and the launcher keeps
+ * switching sources until everything times out ("stuck starting, versions
+ * cycling"). Clear non-self LISTENING pids on the origin port before spawning.
+ * Only runs when the health probe already failed, so a healthy service —
+ * including one the user started manually — is never touched. */
+function clearZombieListener(origin) {
+  if (process.platform !== 'win32') return
+  try {
+    const port = new URL(origin).port
+    if (!port) return
+    const result = spawnSync('netstat', ['-ano'], { encoding: 'utf8' })
+    if (result.status !== 0 || !result.stdout) return
+    const pids = new Set()
+    for (const line of result.stdout.split(/\r?\n/)) {
+      if (!line.includes(`:${port} `) || !line.includes('LISTENING')) continue
+      const pid = Number(line.trim().split(/\s+/).pop())
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) pids.add(pid)
+    }
+    for (const pid of pids) {
+      const kill = spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { encoding: 'utf8' })
+      pushLog(kill.status === 0
+        ? `[desktop] 已清除占用 ${port} 端口的残留服务进程（PID ${pid}）`
+        : `[desktop] 清理端口 ${port} 残留进程（PID ${pid}）失败`)
+    }
+  } catch { /* best effort */ }
+}
+
 /** Probe → wake an existing service, else spawn the first candidate that becomes ready. */
 async function start() {
   if (['starting', 'stopping'].includes(state.status)) return describe()
   const { origin } = settings.get()
+  ringBaseline = ring.length
 
   // 宣称“运行中”时先验证：进程可能早已退出（状态未同步）、或端口不再响应。
   // 确实在运行 -> 直接返回；否则复位状态并重新走启动流程，保证「重试启动」
@@ -314,6 +344,9 @@ async function start() {
     state.detail = `正在通过${candidate.label}启动…`
     emit()
     pushLog(`[desktop] 尝试${candidate.label}`)
+    // 每次拉起前清一次僵尸监听（probe 失败说明端口上没有健康服务；
+    // 残留的孤儿进程会一直占端口，导致所有候选 bind 失败、来回切版本）。
+    clearZombieListener(origin)
     const proc = spawnCandidate(candidate)
     child = proc
     state.pid = proc.pid ?? null
@@ -359,12 +392,13 @@ async function start() {
 }
 
 let startRepairing = false
-/** Packages the engine reported missing from the web profile
- * (ERR_MODULE_NOT_FOUND → "Cannot find package 'x' imported from …profiles\web"). */
+let ringBaseline = 0
+/** Packages the engine reported missing from the web profile during THIS
+ * start attempt only (older log lines must not retrigger repairs). */
 function extractMissingProfilePackages() {
   const missing = new Set()
   const re = /Cannot find package '([^']+)' imported from [^\n]*profiles[/\\]web/
-  for (const line of ring) {
+  for (const line of ring.slice(ringBaseline)) {
     const match = line.match(re)
     if (match) missing.add(match[1])
   }
