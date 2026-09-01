@@ -834,13 +834,26 @@ function init(ipcRenderer) {
                   }
                 } catch { safely('plugins:featured').then(paintFeatured).catch(() => {}) }
               }, true)
+              const uninstallButton = btn('卸载', 'danger', async () => {
+                if (!window.confirm(`确定卸载 ${item.name}？卸载后其功能将从对话界面移除（重启服务生效）。`)) return
+                uninstallButton.disabled = true
+                uninstallButton.textContent = '卸载中…'
+                try {
+                  const result = await safely('plugins:uninstallFeatured', { id: item.id })
+                  toast(result.message ?? '卸载完成')
+                  paintFeatured(await safely('plugins:featured'))
+                  if (window.confirm('卸载完成，是否立即重启服务以应用？')) {
+                    await safely('service:restart').catch(() => {})
+                  }
+                } catch { safely('plugins:featured').then(paintFeatured).catch(() => {}) }
+              }, true)
               return el('div', { class: 'dshdx-card' },
                 el('div', { class: 'dshdx-cardhead' },
                   el('span', { class: 'dshdx-cardtitle', text: item.name }),
                   tag(`★ ${item.stars}`),
                   item.installed ? tag('已安装', 'dshdx-tag-ok') : null,
                   el('span', { class: 'dshdx-cardactions' },
-                    item.installed ? null : installButton,
+                    item.installed ? uninstallButton : installButton,
                     btn('仓库', 'secondary', () => call('shell:openExternal', item.url), true),
                   ),
                 ),

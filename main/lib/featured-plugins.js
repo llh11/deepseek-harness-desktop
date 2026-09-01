@@ -61,6 +61,16 @@ function registerBundle(dir, packageName) {
   fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 }
 
+/** Remove a bundle from the profile manifest (idempotent). */
+function unregisterBundle(dir, packageName) {
+  const file = path.join(dir, 'package.json')
+  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'))
+  const bundles = manifest?.dsh?.profile?.bundles
+  if (!Array.isArray(bundles)) return
+  manifest.dsh.profile.bundles = bundles.filter((name) => name !== packageName)
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+}
+
 /** Already present in bundles (=> installed)? */
 function isInstalled(packageName) {
   try {
@@ -71,22 +81,21 @@ function isInstalled(packageName) {
   }
 }
 
-/** Run one bundled-npm install inside the profile dir, streaming progress.
+/** Run one bundled-npm command inside the profile dir, streaming progress.
  * --legacy-peer-deps is mandatory for the community plugin ecosystem: peer
  * ranges against @deepseek-ai/* frequently trail the installed engine
  * (e.g. ^0.1.0-rc.8 vs 0.1.1-rc.2) and strict npm would ERESOLVE-fail the
  * whole install over harmless engine-version drift. */
-function npmInstall(packages, send) {
+function npmRun(npmArgs, send) {
   return new Promise((resolve, reject) => {
-    const list = Array.isArray(packages) ? packages : [packages]
     const node = runtime.nodeExe()
     const npmCli = runtime.npmCli()
     if (!node || !npmCli) {
-      reject(new Error('未找到随包 Node/npm 运行时，无法安装插件'))
+      reject(new Error('未找到随包 Node/npm 运行时，无法执行该操作'))
       return
     }
     const dir = ensureProfile()
-    const proc = spawn(node, [npmCli, 'install', '--prefix', dir, '--legacy-peer-deps', '--registry', 'https://registry.npmmirror.com', '--no-audit', '--no-fund', '--loglevel', 'error', ...list.map((name) => `${name}@latest`)], {
+    const proc = spawn(node, [npmCli, ...npmArgs, '--prefix', dir, '--legacy-peer-deps', '--registry', 'https://registry.npmmirror.com', '--no-audit', '--no-fund', '--loglevel', 'error'], {
       cwd: dir,
       env: { ...process.env, PATH: `${path.dirname(node)}${path.delimiter}${process.env.PATH ?? ''}` },
       windowsHide: true,
@@ -107,6 +116,12 @@ function npmInstall(packages, send) {
       else reject(new Error(`npm 退出码 ${code}：\n${tail.slice(-6).join('\n')}`))
     })
   })
+}
+
+/** Install packages (@latest) into the web profile. */
+function npmInstall(packages, send) {
+  const list = Array.isArray(packages) ? packages : [packages]
+  return npmRun(['install', ...list.map((name) => `${name}@latest`)], send)
 }
 
 /** Featured catalog with live installed flags. */
@@ -150,4 +165,30 @@ async function install({ id }, send = () => {}) {
   return { ok: true, message: '安装完成，重启服务后生效' }
 }
 
-module.exports = { catalog, install, installPackagesIntoProfile, FEATURED }
+/**
+ * Uninstall one featured plugin: npm uninstall from the web profile, remove
+ * the bundle registration. Restart the service to unmount it. Orphaned
+ * transitive dependencies (e.g. an aggregate bundle's children) are pruned
+ * afterwards so the profile does not accumulate dead packages.
+ */
+async function uninstall({ id }, send = () => {}) {
+  const item = FEATURED.find((entry) => entry.id === id)
+  if (!item) throw new Error('未知精选插件')
+  if (!isInstalled(item.package)) {
+    unregisterBundle(ensureProfile(), item.package)
+    return { ok: true, message: '该插件未安装（已清理残留注册项）' }
+  }
+  const dir = ensureProfile()
+  send(`正在卸载 ${item.package}…`)
+  await npmRun(['uninstall', item.package], send)
+  unregisterBundle(dir, item.package)
+  // 清理聚合包卸载后遗留的孤儿依赖（npm 不会自动移除）。
+  try {
+    await npmRun(['prune'], send)
+  } catch { /* prune 失败不影响卸载结果 */ }
+  const gone = !fs.existsSync(path.join(dir, 'node_modules', ...item.package.split('/')))
+  send(gone ? '已从 web profile 移除' : '包目录仍在（将被引擎忽略），下次 npm 操作时清理')
+  return { ok: true, message: '卸载完成，重启服务后生效' }
+}
+
+module.exports = { catalog, install, uninstall, installPackagesIntoProfile, FEATURED }

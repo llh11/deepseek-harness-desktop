@@ -172,6 +172,7 @@ function registerIpc() {
   ipcMain.handle('plugins:catalog', () => plugins.catalog())
   ipcMain.handle('plugins:featured', () => featuredPlugins.catalog())
   ipcMain.handle('plugins:installFeatured', (_event, payload) => featuredPlugins.install(payload ?? {}, (line) => sendToWindows('updates:progress', line)))
+  ipcMain.handle('plugins:uninstallFeatured', (_event, payload) => featuredPlugins.uninstall(payload ?? {}, (line) => sendToWindows('updates:progress', line)))
 
   ipcMain.handle('balances:list', () => balances.balances())
   ipcMain.handle('official-usage:stats', () => officialUsage.stats())
