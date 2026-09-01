@@ -52,7 +52,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "DeepSeek Harness"
+      "shortcutName": "DeepSeek Harness",
+      "differentialPackage": false
     }
   },
   "allowScripts": {}
