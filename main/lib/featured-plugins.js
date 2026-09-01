@@ -15,7 +15,10 @@ const { spawn } = require('node:child_process')
 const { dshHome } = require('./paths')
 const runtime = require('./runtime')
 
-/** Curated plugins, hottest first (GitHub stars as of 2026-08). */
+/** Curated plugins, hottest first (GitHub stars as of 2026-08). `leftovers`
+ * lists $DSH_HOME-relative paths each plugin persists (agent presets, skins,
+ * pets, boards, market data) — removed on uninstall so every module the
+ * plugin influenced (Agent 预设 included) is fully restored. */
 const FEATURED = [
   {
     id: 'dshmarket',
@@ -24,6 +27,7 @@ const FEATURED = [
     stars: '2.6k+',
     url: 'https://github.com/dsh-market/dsh-market',
     summary: '内置可视化插件市场：浏览 / 搜索 1500+ 生态插件，一键安装、热启停、主题切换与配置备份。装好后入口在官方「设置 → Plugin Market」。',
+    leftovers: ['profiles/web/.dsh-market'],
   },
   {
     id: 'dsh-web-all',
@@ -32,6 +36,9 @@ const FEATURED = [
     stars: '6.2k+',
     url: 'https://github.com/zhu1090093659/dsh-web',
     summary: '任务看板（cron 定时真实执行）、SSH 运维面板、移动端远程、Git 图谱、皮肤工坊。与桌面端/官方重复的子项（桌面启动器、Skill 中心、图像理解）装后可在官方「插件配置」中关闭。',
+    // task-board/.agent-presets/liangshen/skin-center/pet.json: data dirs and
+    // the 梁神模式 agent preset the bundle's plugins write into $DSH_HOME.
+    leftovers: ['task-board', '.agent-presets/liangshen', 'skin-center', 'skin-center-active.json', 'pet.json', 'profiles/web/package.json.bak'],
   },
 ]
 
@@ -165,11 +172,66 @@ async function install({ id }, send = () => {}) {
   return { ok: true, message: '安装完成，重启服务后生效' }
 }
 
+/** Remove the plugin's own entries from the profile's cordis.patch.yml
+ * (enable/disable rows written by the market or the plugin itself), so a
+ * stale patch row never references a package that no longer exists.
+ * Entries are top-level "- …" blocks: a block is dropped when any of its
+ * lines mentions the package (full name or short name). */
+function cleanPatchEntries(dir, packageName) {
+  const patchFile = path.join(dir, 'cordis.patch.yml')
+  let text
+  try { text = fs.readFileSync(patchFile, 'utf8') } catch { return 0 }
+  if (!text || !text.trim()) return 0
+  const shortName = packageName.split('/').pop()
+  const blocks = []
+  let current = null
+  for (const line of text.split(/\r?\n/)) {
+    if (/^\s*-\s/.test(line)) {
+      if (current) blocks.push(current)
+      current = [line]
+    } else if (current && line.trim() !== '') {
+      current.push(line)
+    } else if (current) {
+      blocks.push(current)
+      current = null
+    }
+  }
+  if (current) blocks.push(current)
+  const keptBlocks = blocks.filter((block) => {
+    const hit = block.some((line) => line.includes(packageName) || line.includes(shortName))
+    if (hit) return false
+    return true
+  })
+  const removed = blocks.length - keptBlocks.length
+  if (removed > 0) {
+    const out = keptBlocks.map((block) => block.join('\n')).join('\n')
+    fs.writeFileSync(patchFile, out.endsWith('\n') ? out : `${out}\n`, 'utf8')
+  }
+  return removed
+}
+
+/** Delete the plugin's persisted leftovers under $DSH_HOME (agent presets,
+ * skins, pets, boards, market data). @returns {string[]} removed paths. */
+function removeLeftovers(item) {
+  const removed = []
+  for (const rel of item.leftovers ?? []) {
+    const full = path.join(dshHome, ...rel.split('/'))
+    try {
+      if (fs.existsSync(full)) {
+        fs.rmSync(full, { recursive: true, force: true })
+        removed.push(rel)
+      }
+    } catch { /* best effort; report below */ }
+  }
+  return removed
+}
+
 /**
  * Uninstall one featured plugin: npm uninstall from the web profile, remove
- * the bundle registration. Restart the service to unmount it. Orphaned
- * transitive dependencies (e.g. an aggregate bundle's children) are pruned
- * afterwards so the profile does not accumulate dead packages.
+ * the bundle registration, strip its cordis.patch.yml rows and delete every
+ * module it influenced under $DSH_HOME (Agent 预设、任务看板、皮肤、宠物、
+ * 市场数据) so the affected modules are fully restored. Orphaned transitive
+ * dependencies (e.g. an aggregate bundle's children) are pruned afterwards.
  */
 async function uninstall({ id }, send = () => {}) {
   const item = FEATURED.find((entry) => entry.id === id)
@@ -182,13 +244,19 @@ async function uninstall({ id }, send = () => {}) {
   send(`正在卸载 ${item.package}…`)
   await npmRun(['uninstall', item.package], send)
   unregisterBundle(dir, item.package)
+  const patchRows = cleanPatchEntries(dir, item.package)
   // 清理聚合包卸载后遗留的孤儿依赖（npm 不会自动移除）。
   try {
     await npmRun(['prune'], send)
   } catch { /* prune 失败不影响卸载结果 */ }
   const gone = !fs.existsSync(path.join(dir, 'node_modules', ...item.package.split('/')))
   send(gone ? '已从 web profile 移除' : '包目录仍在（将被引擎忽略），下次 npm 操作时清理')
-  return { ok: true, message: '卸载完成，重启服务后生效' }
+  send('正在清理插件写入的数据（Agent 预设、任务看板、皮肤等）…')
+  const removedLeftovers = removeLeftovers(item)
+  const parts = ['卸载完成，重启服务后生效']
+  if (removedLeftovers.length > 0) parts.push(`已复原模块：${removedLeftovers.join('、')}`)
+  if (patchRows > 0) parts.push(`已清理 ${patchRows} 条 patch 残留`)
+  return { ok: true, message: parts.join('；') }
 }
 
 module.exports = { catalog, install, uninstall, installPackagesIntoProfile, FEATURED }
