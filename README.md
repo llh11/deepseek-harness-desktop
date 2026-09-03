@@ -206,4 +206,5 @@ npm run dist
 - **管理后台**（`/admin/`，密码登录）：上传引擎包 / 桌面安装包（分片上传）、编辑 feed.json、站点内容（QQ 群、截图）、版本历史管理、手动「检查官方最新版本 / 自动同步官方版本」。
 - **cron / HTTP 同步**（`sync.php`）：`*/30 * * * * php sync.php` 或 `GET /sync.php?token=<sync_token>`；官方版本发现依次尝试 npmmirror 与 npmjs。
 - **远程发布 API**（`api.php`，请求头 `X-Mirror-Token`，1.4.0 新增）：`action=status` 查看镜像状态、`action=sync` 触发同步、`action=chunk` + `action=assemble` 分片上传安装包 / 引擎包、`action=set-feed` 更新桌面版更新源。适合构建机发布新版本，无需登录后台。
+- **站点代码发布**（`build-tools/publish-site.py`，构建机侧）：把 `mirror-site/` 打包为 **tar.gz** 经部署管家 API 上传并自动部署。Windows 下必须用 tar.gz 而非 zip——`Compress-Archive` 的 zip 条目使用反斜杠路径（`assets\dsh.svg`），Linux 端解压会把反斜杠当作文件名字符，破坏全部子目录结构（图片 404、admin 失效）。
 - **懒同步**（1.4.0 新增）：`latest.php`（动态版本清单，客户端更新检查优先请求）与首页在镜像数据超过 6 小时未同步时自动安排一次后台同步（带锁防并发），镜像站因此无需任何 cron 也能自动跟进官方版本。
