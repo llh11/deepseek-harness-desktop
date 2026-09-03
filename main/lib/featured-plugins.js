@@ -226,6 +226,26 @@ function removeLeftovers(item) {
   return removed
 }
 
+/** Disable a community plugin that broke the browser boot (used by the boot
+ * self-heal for ANY plugin registered in the web profile, not just featured
+ * ones): drop its `dsh.profile.bundles` registration and every patch row
+ * referencing it. The npm package and its data stay for a later reinstall.
+ * @returns {boolean} true when the profile actually referenced the package. */
+function disableCommunityBundle(packageName) {
+  let touched = false
+  try {
+    const dir = ensureProfile()
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    const bundles = manifest?.dsh?.profile?.bundles
+    if (Array.isArray(bundles) && bundles.includes(packageName)) {
+      unregisterBundle(dir, packageName)
+      touched = true
+    }
+    if (cleanPatchEntries(dir, packageName) > 0) touched = true
+  } catch { /* profile unreadable — nothing we can do here */ }
+  return touched
+}
+
 /**
  * Uninstall one featured plugin: npm uninstall from the web profile, remove
  * the bundle registration, strip its cordis.patch.yml rows and delete every
@@ -259,4 +279,4 @@ async function uninstall({ id }, send = () => {}) {
   return { ok: true, message: parts.join('；') }
 }
 
-module.exports = { catalog, install, uninstall, installPackagesIntoProfile, FEATURED }
+module.exports = { catalog, install, uninstall, installPackagesIntoProfile, disableCommunityBundle, FEATURED }

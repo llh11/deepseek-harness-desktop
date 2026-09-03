@@ -170,6 +170,7 @@ footer a:hover { color: var(--text); }
   <table>
     <tr><th style="width:200px">问题</th><th>处理</th></tr>
     <tr><td>服务一直「启动中」</td><td>npx 首次安装需下载依赖，最长 5 分钟；「内置服务 -> 查看日志」确认进度。</td></tr>
+    <tr><td>启动页报 Failed to load plugins</td><td>多为社区插件与当前引擎版本不匹配（如 dsh-agent-teams 等待仅新引擎提供的 uiConversation 服务）。桌面端 1.5.5 起会<b>自动停用</b>此类插件并恢复启动（插件市场内显示为已停用，引擎升级后可重新启用）；也可在官方「设置 -> 插件市场」中手动卸载后重启服务。</td></tr>
     <tr><td>图片附件被拒绝</td><td>该模型未声明图片输入。在官方「模型」板块为自定义路由声明 <code>defaultInput: [text, image]</code>，或选择官方内置视觉模型。</td></tr>
     <tr><td>MCP 工具未出现</td><td>先「测试连接」确认握手；确认已启用并以注入层重启；stdio 命令需本机可用。</td></tr>
     <tr><td>服务报 sharp 模块错误</td><td>引擎包解压不完整（更新中断）。重新执行一次「一键更新官方引擎」。</td></tr>
@@ -177,6 +178,8 @@ footer a:hover { color: var(--text); }
   </table>
   <h3>版本历史要点</h3>
   <ul>
+    <li><b>1.5.5</b>：启动自愈——社区插件与当前引擎不匹配导致启动页 <code>Failed to load plugins</code>（如 <code>@nanmicoder/dsh-agent-teams</code> 等待 <code>uiConversation</code> 服务）时，自动停用该插件并恢复启动，插件与数据保留、可随时重新启用；精选插件卸载确认文案完善。</li>
+    <li><b>1.5.0 – 1.5.4</b>：启动提速、背景壁纸、精选插件原生融合、精选插件一键卸载与数据残留复原（Agent 预设/任务看板/皮肤/宠物）、僵尸端口占用与插件断链启动修复。</li>
     <li><b>1.4.0</b>：模型与多模态管理回归官方板块（含旧配置自动迁移）；修复账户余额误报与官方用量读取失败；修复模型模态误标；镜像自动跟进官方版本 + 远程发布 API。</li>
     <li><b>1.3.3</b>：内置引擎升级 0.1.1-rc.2；适配官方 <code>--no-open</code> 启动行为。</li>
     <li><b>1.3.2 / 1.3.1 / 1.3.0</b>：多模态对话流集成、账户与用量板块、Skill/MCP 可视化管理、更新通道绑定镜像站、插件中文注解、图片灯箱增强。</li>

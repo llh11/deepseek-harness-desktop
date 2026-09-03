@@ -17,6 +17,7 @@ const balances = require('./lib/balances')
 const updater = require('./lib/updater')
 const plugins = require('./lib/plugin-explainer')
 const featuredPlugins = require('./lib/featured-plugins')
+const bootHeal = require('./lib/boot-heal')
 const officialUsage = require('./lib/official-usage')
 const { ensureDesktopDir } = require('./lib/paths')
 
@@ -173,6 +174,28 @@ function registerIpc() {
   ipcMain.handle('plugins:featured', () => featuredPlugins.catalog())
   ipcMain.handle('plugins:installFeatured', (_event, payload) => featuredPlugins.install(payload ?? {}, (line) => sendToWindows('updates:progress', line)))
   ipcMain.handle('plugins:uninstallFeatured', (_event, payload) => featuredPlugins.uninstall(payload ?? {}, (line) => sendToWindows('updates:progress', line)))
+
+  // Browser-boot self-heal: the renderer reports entries that did not
+  // activate ("@scope/pkg: pending (waiting for service: X)"), the heal
+  // disables those plugins through the profile's user patch layer (or
+  // unregisters them and restarts the service as the fallback).
+  ipcMain.handle('plugins:healBoot', async (_event, payload) => {
+    const failures = Array.isArray(payload?.failures) ? payload.failures : []
+    let result
+    try {
+      result = await bootHeal.heal(failures, {
+        origin: settings.get().origin,
+        restart: async () => { await service.restart() },
+      })
+    } catch (error) {
+      result = { action: 'manual', reload: false, healed: [], manual: [], message: `自动修复失败：${error.message ?? error}` }
+    }
+    if (service.describe().status === 'running-external' && result.action === 'manual') {
+      result.message += '（当前为外部服务，请手动重启该服务后重试）'
+    }
+    return result
+  })
+  ipcMain.handle('plugins:lastHeal', () => bootHeal.lastHeal())
 
   ipcMain.handle('balances:list', () => balances.balances())
   ipcMain.handle('official-usage:stats', () => officialUsage.stats())

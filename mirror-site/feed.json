@@ -1,5 +1,6 @@
 {
-    "version": "1.4.0",
-    "url": "dl.php?f=desktop/DeepSeek-Harness-Desktop-Setup-1.4.0.exe",
-    "notes": "1.4.0：模型与多模态管理全面回归官方「模型」板块（官方已原生支持多模态与 Anthropic 原生协议，旧配置自动迁移为官方直连路由）；修复账户余额误报未配置与官方用量读取失败；镜像站自动跟进官方最新引擎版本"
+    "version": "1.5.5",
+    "url": "dl.php?f=desktop/DeepSeek-Harness-Desktop-Setup-1.5.5.exe",
+    "notes": "1.5.5（NSIS 安装包）：启动自愈——社区插件与当前引擎不匹配导致启动页 Failed to load plugins（如 dsh-agent-teams 等待 uiConversation 服务）时，自动停用该插件并恢复启动，插件与数据保留、可随时重新启用；精选插件卸载确认文案完善。覆盖安装即可，数据保留",
+    "sha256": "5d1a409592f93316204a43c1fc42ff4eabab2aab5b962720309016a0b2d4ddc8"
 }

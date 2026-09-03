@@ -395,11 +395,120 @@ function init(ipcRenderer) {
   const start = () => {
     adoptStyles()
     scan()
-    state.observer = new MutationObserver(() => scan())
+    state.observer = new MutationObserver(() => { scan(); checkBootFailure() })
     state.observer.observe(document.documentElement, { childList: true, subtree: true })
   }
   if (document.documentElement) start()
   else document.addEventListener('DOMContentLoaded', start)
+
+  /* ======================================================================
+   * Browser-boot self-heal. The official boot page ([data-dsh-boot]) stays
+   * up with "Failed to load plugins" when a community plugin never
+   * activates (e.g. "@nanmicoder/dsh-agent-teams: pending (waiting for
+   * service: uiConversation)" — a service only newer alpha engines provide).
+   * The whole UI — including this settings panel — is then unreachable, so
+   * the desktop shell itself must detect the failure page, report it to the
+   * main process (which disables the plugin through the user patch layer)
+   * and reload once healed.
+   * ==================================================================== */
+  let bootHealReported = false
+  let bootHealBanner = null
+
+  function setBootHealBanner(text) {
+    if (!bootHealBanner || !bootHealBanner.isConnected) {
+      bootHealBanner = document.createElement('div')
+      // Inline styles: the boot failure page carries no official design tokens.
+      bootHealBanner.style.cssText = [
+        'position:fixed', 'left:50%', 'bottom:36px', 'transform:translateX(-50%)',
+        'max-width:min(680px, calc(100vw - 48px))', 'z-index:2147483647',
+        'font:13px/1.75 "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif',
+        'background:#111827', 'color:#e5e7eb', 'padding:14px 22px', 'border-radius:12px',
+        'border:1px solid rgba(255,255,255,.14)', 'box-shadow:0 12px 40px rgba(0,0,0,.45)',
+        'white-space:pre-wrap', 'text-align:center', 'word-break:break-all',
+      ].join(';')
+      document.documentElement.appendChild(bootHealBanner)
+    }
+    bootHealBanner.textContent = text
+  }
+
+  /** Own text of each div inside the boot page (the multi-line failure
+   * message renders as one div — its own text spans several lines). */
+  function collectBootLines() {
+    const root = document.querySelector('[data-dsh-boot]')
+    if (!root) return null
+    const lines = []
+    for (const node of root.querySelectorAll('div')) {
+      let own = ''
+      for (const child of node.childNodes) if (child.nodeType === Node.TEXT_NODE) own += child.nodeValue
+      for (const line of own.split('\n')) {
+        const trimmed = line.trim()
+        if (trimmed !== '') lines.push(trimmed)
+      }
+    }
+    return lines
+  }
+
+  function parseBootFailures(lines) {
+    const failures = []
+    const seen = new Set()
+    for (const line of lines) {
+      if (line === 'HARNESS' || line === 'Failed to load plugins' || line.startsWith('web boot:')) continue
+      const detailed = /^([\w@][\w@/.-]*): (.+)$/.exec(line)
+      if (detailed && !seen.has(detailed[1])) {
+        seen.add(detailed[1])
+        failures.push({ name: detailed[1], reason: detailed[2] })
+        continue
+      }
+      // Standalone failed ids (import failures are also listed as bare rows).
+      if (/^[\w@][\w@/.-]*$/.test(line) && !seen.has(line)) {
+        seen.add(line)
+        failures.push({ name: line, reason: 'import failed' })
+      }
+    }
+    return failures
+  }
+
+  function checkBootFailure() {
+    if (bootHealReported || !location.href.startsWith('http')) return
+    const lines = collectBootLines()
+    if (lines === null || !lines.includes('Failed to load plugins')) return
+    const failures = parseBootFailures(lines)
+    if (failures.length === 0) return
+    bootHealReported = true
+    runBootHeal(failures)
+  }
+
+  async function runBootHeal(failures) {
+    const names = failures.map((failure) => failure.name).join('、')
+    setBootHealBanner(`检测到未能激活的插件：${names}\n正在自动停用并恢复启动…`)
+    let result = null
+    try { result = await call('plugins:healBoot', { failures }) } catch { result = null }
+    if (!result || typeof result !== 'object') {
+      result = { reload: false, message: '自动修复暂不可用：请重启应用，或通过插件市场卸载相关插件后重启服务。' }
+    }
+    setBootHealBanner(result.message || '修复流程已结束。')
+    if (result.reload) setTimeout(() => { try { location.reload() } catch { /* navigating */ } }, 1200)
+  }
+
+  // After a successful heal the fresh page boots normally; tell the user what
+  // was disabled (and how to get it back once the engine catches up). The
+  // boot page is disposed on success, so wait for it to disappear — but stay
+  // silent the moment a failure page takes over (the banner covers that).
+  ;(async () => {
+    if (!location.href.startsWith('http')) return // loading page is transient
+    for (let tick = 0; tick < 30; tick += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (bootHealReported) return
+      if (!document.querySelector('[data-dsh-boot]')) break
+    }
+    if (bootHealReported) return
+    try {
+      const last = await call('plugins:lastHeal')
+      if (!last || !Array.isArray(last.healed) || last.healed.length === 0) return
+      if (Date.now() - (last.at ?? 0) > 5 * 60_000) return
+      toast(`已自动停用与当前引擎不兼容的插件：${last.healed.join('、')}（引擎升级后可在插件市场重新启用）`)
+    } catch { /* cosmetic */ }
+  })()
 
   // Tray / loading-page "settings" command: click the official trigger itself.
   ipcRenderer.on('desktop:toggle-control', () => {
@@ -835,7 +944,7 @@ function init(ipcRenderer) {
                 } catch { safely('plugins:featured').then(paintFeatured).catch(() => {}) }
               }, true)
               const uninstallButton = btn('卸载', 'danger', async () => {
-                if (!window.confirm(`确定卸载 ${item.name}？卸载后其功能将从对话界面移除（重启服务生效）。`)) return
+                if (!window.confirm(`确定卸载 ${item.name}？将同时清理其写入的数据（Agent 预设、任务看板、皮肤、宠物等），相关模块恢复原状（重启服务生效）。`)) return
                 uninstallButton.disabled = true
                 uninstallButton.textContent = '卸载中…'
                 try {

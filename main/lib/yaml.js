@@ -3,7 +3,10 @@
 const yaml = require('js-yaml')
 
 const JS_MARKER = '__dsh_js_expr__'
-const jsTagNames = ['!!js/function', '!!js/regexp', '!!js/undefined', '!js/function', '!js/regexp', '!js/undefined']
+// `!!js/function` etc. come from js-yaml's own ecosystem; the bare `!!js`
+// prefix is dsh's expression dialect (`mode: !!js process.env.X`), used in
+// cordis patch layers. All map to the same marker so loads round-trip.
+const jsTagNames = ['!!js/function', '!!js/regexp', '!!js/undefined', '!js/function', '!js/regexp', '!js/undefined', '!!js']
 const jsTypes = jsTagNames.map((tag) => new yaml.Type(tag, {
   kind: 'scalar',
   construct: (value) => `${JS_MARKER}${value}`,

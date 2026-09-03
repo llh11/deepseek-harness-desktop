@@ -13,6 +13,7 @@ const INVOKE_CHANNELS = new Set([
   'skills:list', 'skills:listMerged', 'skills:install', 'skills:installPaths', 'skills:searchGitHub', 'skills:remove', 'skills:toggle', 'skills:refresh',
   'mcp:state', 'mcp:save', 'mcp:remove', 'mcp:toggle', 'mcp:apply', 'mcp:test',
   'plugins:catalog', 'plugins:featured', 'plugins:installFeatured', 'plugins:uninstallFeatured',
+  'plugins:healBoot', 'plugins:lastHeal',
   'balances:list', 'official-usage:stats',
   'updates:check', 'updates:applyOfficial', 'updates:downloadDesktop',
   'shell:openExternal', 'shell:openPath', 'ui:openControl', 'ui:openMain',
